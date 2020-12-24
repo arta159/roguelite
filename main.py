@@ -35,7 +35,8 @@ running = True
 while running:
 
     for event in pygame.event.get():
-        pass
+        if event.type == pygame.QUIT:
+            running = False
     screen.fill(pygame.Color(0, 0, 0))
     pygame.display.flip()
     clock.tick(60)
