@@ -39,6 +39,7 @@ class AnimatedSprite(pygame.sprite.Sprite):
         self.cur_frame = 0
         self.image = self.frames[self.cur_frame]
         self.rect = self.rect.move(self.x, self.y)
+        self.x, self.y = 0, 0
 
     def cut_sheet(self, sheet, columns, rows):
         self.rect = pygame.Rect(0, 0, sheet.get_width() // columns, sheet.get_height() // rows)
@@ -116,10 +117,17 @@ def hero_moved(events):
         elif events.key in (pygame.K_UP, pygame.K_DOWN,
                             pygame.K_RIGHT, pygame.K_LEFT):
             head_control = False
+    if not head_control:
+        Head.route = Body.route
 
 
-Body = AnimatedSprite(load_image("OnlyBody1.png", -1), 4, 4, 0, 0)
-Head = AnimatedSprite(load_image("OnlyHead.png", -1), 4, 4, 0, 0)
+def create_player(x, y):
+    global Body, Head
+    Body = AnimatedSprite(load_image("OnlyBody1.png", -1), 4, 4, x, y)
+    Head = AnimatedSprite(load_image("OnlyHead.png", -1), 4, 4, x, y)
+
+
+create_player(100, 100)
 running = True
 while running:
     for event in pygame.event.get():
@@ -127,8 +135,6 @@ while running:
             running = False
         elif event.type in (pygame.KEYDOWN, pygame.KEYUP):
             hero_moved(event)
-    if not head_control:
-        Head.route = Body.route
     screen.fill(pygame.Color('white'))
     all_sprites.draw(screen)
     all_sprites.update()
