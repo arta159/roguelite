@@ -6,9 +6,13 @@ import pygame
 all_sprites = pygame.sprite.Group()
 WIDTH = 400
 HEIGHT = 300
+speed_player = 5
+player_bullet_speed = 10
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 head_control = False
+SHOT_EVENT = pygame.USEREVENT + 1
+pygame.time.set_timer(SHOT_EVENT, 1000)
 
 
 def load_image(name, color_key=None):
@@ -32,6 +36,7 @@ class AnimatedSprite(pygame.sprite.Sprite):
     def __init__(self, sheet, columns, rows, x, y):
         super().__init__(all_sprites)
         self.x, self.y = x, y
+        self.columns = columns
         sheet = pygame.transform.scale(sheet, (sheet.get_width() * 2, sheet.get_height() * 2))
         self.route = 0
         self.frames = []
@@ -51,7 +56,7 @@ class AnimatedSprite(pygame.sprite.Sprite):
     def update(self):
         self.rect = self.rect.move(self.x, self.y)
         if self.x != 0 or self.y != 0:
-            self.cur_frame = (self.cur_frame + 0.25) % 4 + self.route
+            self.cur_frame = (self.cur_frame + 0.25) % self.columns + self.route
         else:
             self.cur_frame = 0 + self.route
         self.image = self.frames[int(self.cur_frame)]
@@ -62,7 +67,26 @@ def terminate():
     sys.exit()
 
 
-def hero_moved(events):
+def create_standard_bullet(person, move_x, move_y):
+    x = person.rect.centerx
+    y = person.rect.centery
+    bullet = AnimatedSprite(load_image("ball_2.png"), 4, 1, x, y)
+    bullet.x = move_x
+    bullet.y = move_y
+
+
+def attack(route):
+    if route == 0:
+        create_standard_bullet(Body, 0, player_bullet_speed)
+    elif route == 12:
+        create_standard_bullet(Body, 0, -player_bullet_speed)
+    elif route == 4:
+        create_standard_bullet(Body, -player_bullet_speed, 0)
+    elif route == 8:
+        create_standard_bullet(Body, +player_bullet_speed, 0)
+
+
+def player_moved(events):
     global head_control
     if events.type == pygame.KEYDOWN:
         if events.key == pygame.K_UP:
@@ -87,33 +111,33 @@ def hero_moved(events):
             head_control = True
         elif events.key == pygame.K_w:
             Body.route = 12
-            Body.y -= 5
-            Head.y -= 5
+            Body.y -= speed_player
+            Head.y -= speed_player
         elif events.key == pygame.K_s:
             Body.route = 0
-            Body.y += 5
-            Head.y += 5
+            Body.y += speed_player
+            Head.y += speed_player
         elif events.key == pygame.K_a:
             Body.route = 4
-            Body.x -= 5
-            Head.x -= 5
+            Body.x -= speed_player
+            Head.x -= speed_player
         elif events.key == pygame.K_d:
             Body.route = 8
-            Body.x += 5
-            Head.x += 5
+            Body.x += speed_player
+            Head.x += speed_player
     elif events.type == pygame.KEYUP:
         if event.key == pygame.K_w:
-            Body.y += 5
-            Head.y += 5
+            Body.y += speed_player
+            Head.y += speed_player
         elif events.key == pygame.K_s:
-            Body.y -= 5
-            Head.y -= 5
+            Body.y -= speed_player
+            Head.y -= speed_player
         elif events.key == pygame.K_a:
-            Body.x += 5
-            Head.x += 5
+            Body.x += speed_player
+            Head.x += speed_player
         elif events.key == pygame.K_d:
-            Body.x -= 5
-            Head.x -= 5
+            Body.x -= speed_player
+            Head.x -= speed_player
         elif events.key in (pygame.K_UP, pygame.K_DOWN,
                             pygame.K_RIGHT, pygame.K_LEFT):
             head_control = False
@@ -134,7 +158,9 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         elif event.type in (pygame.KEYDOWN, pygame.KEYUP):
-            hero_moved(event)
+            player_moved(event)
+        elif event.type == SHOT_EVENT and head_control:
+            attack(Head.route)
     screen.fill(pygame.Color('white'))
     all_sprites.draw(screen)
     all_sprites.update()
