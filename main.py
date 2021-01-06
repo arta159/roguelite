@@ -4,8 +4,8 @@ import pygame
 
 
 all_sprites = pygame.sprite.Group()
-WIDTH = 400
-HEIGHT = 300
+WIDTH = 800
+HEIGHT = 600
 speed_player = 5
 player_bullet_speed = 10
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -33,11 +33,11 @@ def load_image(name, color_key=None):
 
 
 class AnimatedSprite(pygame.sprite.Sprite):
-    def __init__(self, sheet, columns, rows, x, y):
+    def __init__(self, sheet, columns, rows, x, y, size=2):
         super().__init__(all_sprites)
         self.x, self.y = x, y
         self.columns = columns
-        sheet = pygame.transform.scale(sheet, (sheet.get_width() * 2, sheet.get_height() * 2))
+        sheet = pygame.transform.scale(sheet, (sheet.get_width() * size, sheet.get_height() * size))
         self.route = 0
         self.frames = []
         self.cut_sheet(sheet, columns, rows)
@@ -70,7 +70,7 @@ def terminate():
 def create_standard_bullet(person, move_x, move_y):
     x = person.rect.centerx
     y = person.rect.centery
-    bullet = AnimatedSprite(load_image("ball_2.png"), 4, 1, x, y)
+    bullet = AnimatedSprite(load_image("ball_2.png"), 4, 1, x, y, 2)
     bullet.x = move_x
     bullet.y = move_y
 
