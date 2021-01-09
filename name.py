@@ -19,6 +19,7 @@ vertical_walls = pygame.sprite.Group()
 boxes = pygame.sprite.Group()
 bullets = pygame.sprite.Group()
 
+
 def load_image(name, color_key=None):
     fullname = os.path.join('data', name)
     try:
@@ -72,6 +73,7 @@ class Box(pygame.sprite.Sprite):
         super().__init__(all_sprites)
         self.image = Box.box
         self.rect = self.image.get_rect()
+        self.rect.size = (120, 160)
         self.rect.x = randint(110, 790)
         self.rect.y = randint(130, 550)
         while pygame.sprite.spritecollideany(self, boxes):
@@ -79,12 +81,16 @@ class Box(pygame.sprite.Sprite):
             self.rect.y = randint(130, 550)
         self.add(boxes)
 
+    def update(self):
+        self.rect.size = (50, 50)
+
 
 Wall('left')
 Wall('right')
 Wall('top')
 Wall('bottom')
 [Box() for i in range(5)]
+boxes.update()
 
 
 class AnimatedSprite(pygame.sprite.Sprite):
@@ -112,68 +118,70 @@ class AnimatedSprite(pygame.sprite.Sprite):
                 frame_location = (self.rect.w * i, self.rect.h * j)
                 self.frames.append(sheet.subsurface(pygame.Rect(frame_location, self.rect.size)))
 
+    def check(self, axis, bias, box=False):
+        if not box:
+            if axis == 'y':
+                self.rect.y += bias
+                if not pygame.sprite.spritecollideany(self, walls):  # or not pygame.sprite.spritecollideany(self, boxes):
+                    self.y = 0
+                self.rect.y -= bias
+            else:
+                self.rect.x += bias
+                if not pygame.sprite.spritecollideany(self, walls):  # or not pygame.sprite.spritecollideany(self, boxes):
+                    self.x = 0
+                self.rect.x -= bias
+        if box:
+            if axis == 'y':
+                self.rect.y += bias
+                if not pygame.sprite.spritecollideany(self, boxes):
+                    self.y = 0
+                self.rect.y -= bias
+            else:
+                self.rect.x += bias
+                if not pygame.sprite.spritecollideany(self, boxes):  # or not pygame.sprite.spritecollideany(self, boxes):
+                    self.x = 0
+                self.rect.x -= bias
+
+    def zeroing(self):
+        self.x = 0
+        self.y = 0
+
     def character_update(self):
         if pygame.sprite.spritecollideany(self, walls):
             if pygame.sprite.spritecollideany(self, vertical_walls) \
                     and pygame.sprite.spritecollideany(self, horizontal_walls):
                 if self.rect.x < 500 and self.rect.y < 500 and self.x <= 0 and self.y <= 0:
-                    self.x = 0
-                    self.y = 0
+                    self.zeroing()
                 if self.rect.x < 500 and self.rect.y > 500 and self.x <= 0 and self.y >= 0:
-                    self.x = 0
-                    self.y = 0
+                    self.zeroing()
                 if self.rect.x > 500 and self.rect.y > 500 and self.x >= 0 and self.y >= 0:
-                    self.x = 0
-                    self.y = 0
+                    self.zeroing()
                 if self.rect.x > 500 and self.rect.y < 500 and self.x >= 0 and self.y <= 0:
-                    self.x = 0
-                    self.y = 0
+                    self.zeroing()
             if self.y > 0:
-                self.rect.y -= 10
-                if not pygame.sprite.spritecollideany(self, walls): # or not pygame.sprite.spritecollideany(self, boxes):
-                    self.y = 0
-                    print(1)
-                self.rect.y += 10
+                self.check('y', -10)
             if self.y < 0:
-                self.rect.y += 10
-                print(pygame.sprite.spritecollideany(self, walls))
-                if not pygame.sprite.spritecollideany(self, walls):# or not pygame.sprite.spritecollideany(self, boxes):
-                    print(11)
-                    self.y = 0
-                self.rect.y -= 10
+                self.check('y', 10)
             if self.x > 0:
-                self.rect.x -= 10
-                if not pygame.sprite.spritecollideany(self, walls):# and not pygame.sprite.spritecollideany(self, boxes):
-                    print(111)
-                    self.x = 0
-                self.rect.x += 10
+                self.check('x', -10)
             if self.x < 0:
-                self.rect.x += 10
-                if not pygame.sprite.spritecollideany(self, walls):# and not pygame.sprite.spritecollideany(self, boxes):
-                    print(111)
-                    self.x = 0
-                self.rect.x -= 10
+                self.check('x', 10)
         if pygame.sprite.spritecollideany(self, boxes):
             if self.y > 0:
-                self.rect.y -= 10
-                if not pygame.sprite.spritecollideany(self, boxes): # or not pygame.sprite.spritecollideany(self, boxes):
-                    self.y = 0
-                self.rect.y += 10
+                self.check('y', -10, box=True)
             if self.y < 0:
-                self.rect.y += 10
-                if not pygame.sprite.spritecollideany(self, boxes):
-                    self.y = 0
-                self.rect.y -= 10
+                self.check('y', 10, box=True)
             if self.x > 0:
-                self.rect.x -= 10
-                if not pygame.sprite.spritecollideany(self, boxes):
-                    self.x = 0
-                self.rect.x += 10
+                self.check('x', -10, box=True)
             if self.x < 0:
-                self.rect.x += 10
-                if not pygame.sprite.spritecollideany(self, boxes):
-                    self.x = 0
-                self.rect.x -= 10
+                self.check('x', 10, box=True)
+        self.update()
+
+    def update(self, bullet=False):
+        if bullet and (pygame.sprite.spritecollideany(self, boxes) or pygame.sprite.spritecollideany(self, walls)):
+            self.x = 0
+            self.y = 0
+            bullets.remove(self)
         self.rect = self.rect.move(self.x, self.y)
         if self.x != 0 or self.y != 0:
             self.cur_frame = (self.cur_frame + 0.25) % self.columns + self.route
@@ -181,13 +189,6 @@ class AnimatedSprite(pygame.sprite.Sprite):
             self.cur_frame = 0 + self.route
         self.image = self.frames[int(self.cur_frame)]
 
-    def update(self):
-        self.rect = self.rect.move(self.x, self.y)
-        if self.x != 0 or self.y != 0:
-            self.cur_frame = (self.cur_frame + 0.25) % self.columns + self.route
-        else:
-            self.cur_frame = 0 + self.route
-        self.image = self.frames[int(self.cur_frame)]
 
 
 def terminate():
@@ -210,61 +211,55 @@ def attack(route):
                        speed_x=player_bullet_speed, speed_y=0, group=True)
 
 
-def player_moved(events):
+def player_moved():
     global head_control
-    if events.type == pygame.KEYDOWN:
-        if events.key == pygame.K_UP:
+    print(pygame.key.get_pressed()[pygame.K_RIGHT])
+    if True:
+        if pygame.key.get_pressed()[pygame.K_UP]:
             if Body.route == 0:
                 Body.route = 12
             Head.route = 12
             head_control = True
-        elif events.key == pygame.K_DOWN:
+        if pygame.key.get_pressed()[pygame.K_DOWN]:
             if Body.route == 12:
                 Body.route = 0
             Head.route = 0
             head_control = True
-        elif events.key == pygame.K_LEFT:
+        if pygame.key.get_pressed()[pygame.K_LEFT]:
             if Body.route == 8:
                 Body.route = 4
             Head.route = 4
             head_control = True
-        elif events.key == pygame.K_RIGHT:
+        if pygame.key.get_pressed()[pygame.K_RIGHT]:
             if Body.route == 4:
                 Body.route = 8
             Head.route = 8
             head_control = True
-        elif events.key == pygame.K_w:
+        if pygame.key.get_pressed()[pygame.K_w]:
             Body.route = 12
-            Body.y -= speed_player
-            Head.y -= speed_player
-        elif events.key == pygame.K_s:
+            Body.y = -speed_player
+            Head.y = -speed_player
+        if pygame.key.get_pressed()[pygame.K_s]:
             Body.route = 0
-            Body.y += speed_player
-            Head.y += speed_player
-        elif events.key == pygame.K_a:
+            Body.y = speed_player
+            Head.y = speed_player
+        if pygame.key.get_pressed()[pygame.K_a]:
             Body.route = 4
-            Body.x -= speed_player
-            Head.x -= speed_player
-        elif events.key == pygame.K_d:
+            Body.x = -speed_player
+            Head.x = -speed_player
+        if pygame.key.get_pressed()[pygame.K_d]:
             Body.route = 8
-            Body.x += speed_player
-            Head.x += speed_player
-    elif events.type == pygame.KEYUP:
-        if event.key == pygame.K_w and Body.y != 0:
-            Body.y = 0
-            Head.y = 0
-        elif events.key == pygame.K_s and Body.y != 0:
-            Body.y = 0
-            Head.y = 0
-        elif events.key == pygame.K_a and Body.x != 0:
-            Body.x = 0
-            Head.x = 0
-        elif events.key == pygame.K_d and Body.x != 0:
-            Body.x = 0
-            Head.x = 0
-        elif events.key in (pygame.K_UP, pygame.K_DOWN,
-                            pygame.K_RIGHT, pygame.K_LEFT):
-            head_control = False
+            Body.x = speed_player
+            Head.x = speed_player
+    if not pygame.key.get_pressed()[pygame.K_w] and not pygame.key.get_pressed()[pygame.K_s]:
+        Body.y = 0
+        Head.y = 0
+    if not pygame.key.get_pressed()[pygame.K_a] and not pygame.key.get_pressed()[pygame.K_d]:
+        Body.x = 0
+        Head.x = 0
+    if not pygame.key.get_pressed()[pygame.K_UP] and not pygame.key.get_pressed()[pygame.K_DOWN]\
+            and not pygame.key.get_pressed()[pygame.K_LEFT] and not pygame.key.get_pressed()[pygame.K_RIGHT]:
+        head_control = False
     if not head_control:
         Head.route = Body.route
 
@@ -278,18 +273,17 @@ def create_player(x, y):
 create_player(300, 300)
 running = True
 while running:
+    player_moved()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type in (pygame.KEYDOWN, pygame.KEYUP):
-            player_moved(event)
         elif event.type == SHOT_EVENT and head_control:
             attack(Head.route)
     screen.blit(fon, (100, 125))
     all_sprites.draw(screen)
     Head.character_update()
     Body.character_update()
-    bullets.update()
+    bullets.update(bullet=True)
     pygame.display.flip()
     clock.tick(30)
 terminate()
