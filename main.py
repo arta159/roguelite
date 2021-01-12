@@ -46,7 +46,7 @@ def load_image(name, color_key=None):
 fon = pygame.transform.scale(load_image('floor.jpg'), (800, 550))
 
 
-class Heart(pygame.sprite.Sprite):
+class Heart(pygame.sprite.Sprite):  # класс овечающий за хп
     heart = load_image('heart.png')
     broken_heart = load_image('broken_heart.png')
 
