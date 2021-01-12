@@ -302,6 +302,7 @@ def create_player(x, y):
     Body = AnimatedSprite(load_image("OnlyBody1.png", -2), 4, 4, x, y)
     Head = AnimatedSprite(load_image("OnlyHead.png", -2), 4, 4, x, y)
 
+
 flag = True
 create_player(300, 300)
 running = True
