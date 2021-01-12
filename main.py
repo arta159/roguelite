@@ -6,20 +6,22 @@ from random import randint
 all_sprites = pygame.sprite.Group()
 WIDTH = 1000
 HEIGHT = 800
-speed_player = 5
-player_bullet_speed = 10
-player_bullet_damage = 1
+speed_player = 7
+player_bullet_speed = 15
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 head_control = False
+player_bullet_damage = 1
 SHOT_EVENT = pygame.USEREVENT + 1
 pygame.time.set_timer(SHOT_EVENT, 1000)
 walls = pygame.sprite.Group()
-horizontal_walls = pygame.sprite.Group()
-vertical_walls = pygame.sprite.Group()
+thorns = pygame.sprite.Group()
 hearts = pygame.sprite.Group()
 slime = pygame.sprite.Group()
 enemy = pygame.sprite.Group()
+box_thorns = pygame.sprite.Group()
+horizontal_walls = pygame.sprite.Group()
+vertical_walls = pygame.sprite.Group()
 boxes = pygame.sprite.Group()
 hero = pygame.sprite.Group()
 bullets = pygame.sprite.Group()
@@ -93,47 +95,76 @@ class Wall(pygame.sprite.Sprite):
 
 
 class Box(pygame.sprite.Sprite):
-    box = pygame.transform.scale(load_image('box1.png', -2), (50, 50))
+    box = pygame.transform.scale(load_image('box1.png'), (50, 50))
 
-    def __init__(self):
-        super().__init__(all_sprites)
-        self.image = Box.box
+    def __init__(self, image=False):
+        if image:
+            self.image = image
+            group = thorns
+        else:
+            self.image = Box.box
+            group = boxes
+        super().__init__(all_sprites, group)
         self.rect = self.image.get_rect()
         self.rect.size = (120, 160)
         self.rect.x = randint(110, 790)
         self.rect.y = randint(130, 550)
-        while pygame.sprite.spritecollideany(self, boxes):
+        self.mask = pygame.mask.from_surface(self.image)
+        while pygame.sprite.spritecollideany(self, box_thorns):
             self.rect.x = randint(110, 790)
             self.rect.y = randint(130, 550)
-        self.add(boxes)
+        self.add(box_thorns)
 
     def update(self):
         self.rect.size = (50, 50)
+
+
+class Thorns(Box):
+    thorn_im = pygame.transform.scale(load_image('thorns2.png', -2), (50, 50))
+    thorn_activated = pygame.transform.scale(load_image('thorns3.png'), (50, 50))
+
+    def __init__(self):
+        super().__init__(Thorns.thorn_im)
+        self.push_thorns = False
+        self.time = 0
+
+    def update(self):
+        if pygame.sprite.collide_mask(self, Head):
+            self.push_thorns = True
+        if self.push_thorns and not pygame.sprite.collide_mask(self, Head):
+            self.image = Thorns.thorn_activated
+            self.time = pygame.time.get_ticks()
+            self.push_thorns = False
+        if self.time and pygame.time.get_ticks() - self.time >= 3000:
+            self.time = 0
+            self.image = Thorns.thorn_im
+        # self.image = Thorns.thorn_activated
 
 
 Wall('left')
 Wall('right')
 Wall('top')
 Wall('bottom')
-[Box() for i in range(5)]
+[Box() for _ in range(5)]
+[Thorns() for _ in range(3)]
 boxes.update()
 
 
 class AnimatedSprite(pygame.sprite.Sprite):
-    def __init__(self, sheet, columns, rows, x, y, speed_x=0, speed_y=0, group='none'):
+    def __init__(self, sheet, columns, rows, x, y, speed_x=0, speed_y=0, group='none', size=2):
         if group == 'bullets':
             super().__init__(all_sprites, bullets)
         elif group == 'hero':
             super().__init__(all_sprites, hero)
             self.hitPoint = 5
-        elif group == 'enemy':
+        elif group == 'slime':
             super().__init__(all_sprites, slime, enemy)
             self.hitPoint = 2
         elif group == 'none':
             super().__init__(all_sprites)
         self.x, self.y = x, y
         self.columns = columns
-        sheet = pygame.transform.scale(sheet, (sheet.get_width() * 2, sheet.get_height() * 2))
+        sheet = pygame.transform.scale(sheet, (sheet.get_width() * size, sheet.get_height() * size))
         self.route = 0
         self.frames = []
         self.cut_sheet(sheet, columns, rows)
@@ -178,12 +209,12 @@ class AnimatedSprite(pygame.sprite.Sprite):
         self.x = 0
         self.y = 0
 
-    def update(self):
+    def update(self, bullet=False):
         self.rect = self.rect.move(self.x, self.y)
-        if self.x != 0 or self.y != 0:
-            self.cur_frame = (self.cur_frame + 0.25) % self.columns + self.route
-        else:
+        if self.x == 0 and self.y == 0 and self in hero:
             self.cur_frame = 0 + self.route
+        else:
+            self.cur_frame = (self.cur_frame + 0.25) % self.columns + self.route
         self.image = self.frames[int(self.cur_frame)]
 
 
@@ -246,58 +277,62 @@ def terminate():
 
 def attack(route):
     if route == 0:
-        AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.x, Body.rect.y,
-                       speed_x=0, speed_y=player_bullet_speed, group='bullets')
+        AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.centerx, Body.rect.centery,
+                       speed_x=0, speed_y=player_bullet_speed, group='bullets', size=2)
     elif route == 12:
-        AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.x, Body.rect.y,
-                       speed_x=0, speed_y=-player_bullet_speed, group='bullets')
+        AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.centerx, Body.rect.centery,
+                       speed_x=0, speed_y=-player_bullet_speed, group='bullets', size=2)
     elif route == 4:
-        AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.x, Body.rect.y,
-                       speed_x=-player_bullet_speed, speed_y=0, group='bullets')
+        AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.centerx, Body.rect.centery,
+                       speed_x=-player_bullet_speed, speed_y=0, group='bullets', size=2)
     elif route == 8:
-        AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.x, Body.rect.y,
-                       speed_x=player_bullet_speed, speed_y=0, group='bullets')
+        AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.centerx, Body.rect.centery,
+                       speed_x=player_bullet_speed, speed_y=0, group='bullets', size=2)
 
 
 def player_moved():
     global head_control
-    if True:
-        if pygame.key.get_pressed()[pygame.K_UP]:
-            if Body.route == 0:
-                Body.route = 12
-            Head.route = 12
-            head_control = True
-        if pygame.key.get_pressed()[pygame.K_DOWN]:
-            if Body.route == 12:
-                Body.route = 0
-            Head.route = 0
-            head_control = True
-        if pygame.key.get_pressed()[pygame.K_LEFT]:
-            if Body.route == 8:
-                Body.route = 4
-            Head.route = 4
-            head_control = True
-        if pygame.key.get_pressed()[pygame.K_RIGHT]:
-            if Body.route == 4:
-                Body.route = 8
-            Head.route = 8
-            head_control = True
-        if pygame.key.get_pressed()[pygame.K_w]:
+    if pygame.key.get_pressed()[pygame.K_UP]:
+        if Body.route == 0:
             Body.route = 12
-            Body.y = -speed_player
-            Head.y = -speed_player
-        if pygame.key.get_pressed()[pygame.K_s]:
+        Head.route = 12
+        head_control = True
+    if pygame.key.get_pressed()[pygame.K_DOWN]:
+        if Body.route == 12:
             Body.route = 0
-            Body.y = speed_player
-            Head.y = speed_player
-        if pygame.key.get_pressed()[pygame.K_a]:
+        Head.route = 0
+        head_control = True
+    if pygame.key.get_pressed()[pygame.K_LEFT]:
+        if Body.route == 8:
             Body.route = 4
-            Body.x = -speed_player
-            Head.x = -speed_player
-        if pygame.key.get_pressed()[pygame.K_d]:
+        Head.route = 4
+        head_control = True
+    if pygame.key.get_pressed()[pygame.K_RIGHT]:
+        if Body.route == 4:
             Body.route = 8
-            Body.x = speed_player
-            Head.x = speed_player
+        Head.route = 8
+        head_control = True
+    if pygame.key.get_pressed()[pygame.K_w]:
+        Body.route = 12
+        Body.y = -speed_player
+        Head.y = -speed_player
+    if pygame.key.get_pressed()[pygame.K_s]:
+        Body.route = 0
+        Body.y = speed_player
+        Head.y = speed_player
+    if pygame.key.get_pressed()[pygame.K_a]:
+        Body.route = 4
+        Body.x = -speed_player
+        Head.x = -speed_player
+    if pygame.key.get_pressed()[pygame.K_d]:
+        Body.route = 8
+        Body.x = speed_player
+        Head.x = speed_player
+    if (pygame.key.get_pressed()[pygame.K_d] and pygame.key.get_pressed()[pygame.K_LEFT]) or\
+            (pygame.key.get_pressed()[pygame.K_a] and pygame.key.get_pressed()[pygame.K_RIGHT]) or\
+            (pygame.key.get_pressed()[pygame.K_s] and pygame.key.get_pressed()[pygame.K_UP]) or\
+            (pygame.key.get_pressed()[pygame.K_w] and pygame.key.get_pressed()[pygame.K_DOWN]):
+        Body.route = Head.route
     if not pygame.key.get_pressed()[pygame.K_w] and not pygame.key.get_pressed()[pygame.K_s]:
         Body.y = 0
         Head.y = 0
@@ -317,7 +352,8 @@ def create_player(x, y):
     Head = AnimatedSprite(load_image("OnlyHead.png", -2), 4, 4, x, y, group='hero')
 
 
-AnimatedSprite(load_image('slime.png'), 7, 1, 600, 600, group='enemy')
+AnimatedSprite(load_image('slime.png'), 7, 1, 600, 600, group='slime')
+flag = True
 create_player(300, 300)
 [Heart(_) for _ in range(1, 6)]
 running = True
@@ -326,7 +362,10 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == SHOT_EVENT and head_control:
+        if event.type == SHOT_EVENT:
+            flag = True
+        if (event.type == SHOT_EVENT or flag) and head_control:
+            flag = False
             attack(Head.route)
     screen.blit(fon, (100, 125))
     all_sprites.draw(screen)
