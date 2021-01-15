@@ -6,6 +6,7 @@ from random import randint
 all_sprites = pygame.sprite.Group()
 WIDTH = 1000
 HEIGHT = 800
+GRAVITY = 5
 speed_player = 7
 player_bullet_speed = 15
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -14,17 +15,21 @@ head_control = False
 player_bullet_damage = 1
 SHOT_EVENT = pygame.USEREVENT + 1
 pygame.time.set_timer(SHOT_EVENT, 1000)
-walls = pygame.sprite.Group()
 thorns = pygame.sprite.Group()
-hearts = pygame.sprite.Group()
 slime = pygame.sprite.Group()
 enemy = pygame.sprite.Group()
+loot = pygame.sprite.Group()
 box_thorns = pygame.sprite.Group()
+boxes = pygame.sprite.Group()
+bullets = pygame.sprite.Group()
+hero = pygame.sprite.Group()
 horizontal_walls = pygame.sprite.Group()
 vertical_walls = pygame.sprite.Group()
-boxes = pygame.sprite.Group()
-hero = pygame.sprite.Group()
-bullets = pygame.sprite.Group()
+hearts = pygame.sprite.Group()
+walls = pygame.sprite.Group()
+healing = pygame.sprite.Group()
+shield = pygame.sprite.Group()
+doors = pygame.sprite.Group()
 
 
 def load_image(name, color_key=None):
@@ -34,7 +39,6 @@ def load_image(name, color_key=None):
     except pygame.error as message:
         print('Cannot load image:', name)
         raise SystemExit(message)
-
     if color_key is not None:
         if color_key == -1:
             image = image.convert()
@@ -51,21 +55,27 @@ fon = pygame.transform.scale(load_image('floor.jpg'), (800, 550))
 class Heart(pygame.sprite.Sprite):  # класс овечающий за хп
     heart = load_image('heart.png')
     broken_heart = load_image('broken_heart.png')
+    shield = load_image('shield.png')
 
     def __init__(self, posx):
         super().__init__(hearts, all_sprites)
-        if Head.hitPoint >= posx:
+        if Head.hitPoint >= posx and posx <= Head.MaxHitPoint:
             self.image = Heart.heart
-        else:
+        elif Head.hitPoint < posx <= Head.MaxHitPoint:
             self.image = Heart.broken_heart
+        elif Head.hitPoint >= Head.MaxHitPoint:
+            self.image = Heart.shield
         self.rect = self.image.get_rect()
-        self.rect.x = posx * self.image.get_width()
+        self.rect.x = posx * Heart.heart.get_width()
 
     def update(self):
         if Head.hitPoint <= 0:
             [_.kill() for _ in hero]
         [_.kill() for _ in hearts]
-        [Heart(_) for _ in range(1, 6)]
+        if Head.hitPoint >= Head.MaxHitPoint:
+            [Heart(_) for _ in range(1, Head.hitPoint + 1)]
+        else:
+            [Heart(_) for _ in range(1, Head.MaxHitPoint + 1)]
 
 
 class Wall(pygame.sprite.Sprite):
@@ -135,6 +145,8 @@ class Thorns(Box):
             self.image = Thorns.thorn_activated
             self.time = pygame.time.get_ticks()
             self.push_thorns = False
+        if self.time and pygame.sprite.collide_mask(self, Head):
+            hit(1, self, False)
         if self.time and pygame.time.get_ticks() - self.time >= 3000:
             self.time = 0
             self.image = Thorns.thorn_im
@@ -145,9 +157,71 @@ Wall('left')
 Wall('right')
 Wall('top')
 Wall('bottom')
-[Box() for _ in range(5)]
-[Thorns() for _ in range(3)]
-boxes.update()
+
+
+class Door(pygame.sprite.Sprite):
+    door_im = pygame.transform.scale(load_image('door.png', -2), (70, 135))
+    open_close_door = [door_im,
+                       pygame.transform.scale(load_image('door_close05.png'), (70, 135)),
+                       pygame.transform.scale(load_image('door_close1.png'), (70, 135)),
+                       pygame.transform.scale(load_image('door_close2.png'), (70, 135)),
+                       pygame.transform.scale(load_image('door_close3.png'), (70, 135)),
+                       pygame.transform.scale(load_image('door_close.png'), (70, 135))]
+    door_open = [pygame.transform.scale(load_image('door_cl1.png'), (70, 135)),
+                 pygame.transform.scale(load_image('door_cl2.png'), (70, 135)),
+                 pygame.transform.scale(load_image('door_cl3.png'), (70, 135)),
+                 pygame.transform.scale(load_image('door_cl4.png'), (70, 135)),
+                 pygame.transform.scale(load_image('door_cl5.png'), (70, 135))]
+    door_close = pygame.transform.rotate(open_close_door[-1], 180)
+
+    def __init__(self, right=False):
+        super().__init__(all_sprites, doors)
+        if right:
+            self.image = Door.door_close
+            self.rect = self.image.get_rect()
+            self.rect.x = 890
+            self.rect.y = 330
+            self.open = 5
+            self.time = 0
+            self.lights = 0
+            self.close = 1
+            self.close_flag = True
+            self.mask = pygame.mask.from_surface(Door.door_close)
+        else:
+            self.image = Door.door_im
+            self.rect = self.image.get_rect()
+            self.rect.x = 40
+            self.rect.y = 330
+            self.close = 1
+            self.time = pygame.time.get_ticks()
+
+    def close_door(self, left=False):
+        if self.close < 6 and pygame.time.get_ticks() - self.time > 50:
+            if left:
+                self.image = pygame.transform.rotate(Door.open_close_door[self.close], 180)
+            else:
+                self.image = Door.open_close_door[self.close]
+            self.close += 1
+            self.time = pygame.time.get_ticks()
+
+    def open_door(self):
+        if self.open > -1 and pygame.time.get_ticks() - self.time > 50:
+            self.image = pygame.transform.rotate(Door.open_close_door[self.open], 180)
+            self.open -= 1
+            self.time = pygame.time.get_ticks()
+        elif pygame.time.get_ticks() - self.time > 50:
+            self.close_flag = False
+            self.image = Door.door_open[self.lights]
+            self.lights += 1
+            self.lights %= 3
+            self.time = pygame.time.get_ticks()
+
+    def interaction(self):
+        # if self.close and pygame.sprite.collide_mask(self, Body) and Head.x > 0:
+        #     Head.x = 0
+        if pygame.sprite.collide_mask(self, Body) and not self.close_flag:
+            generation_room()
+            self.close = True
 
 
 class AnimatedSprite(pygame.sprite.Sprite):
@@ -156,7 +230,9 @@ class AnimatedSprite(pygame.sprite.Sprite):
             super().__init__(all_sprites, bullets)
         elif group == 'hero':
             super().__init__(all_sprites, hero)
-            self.hitPoint = 5
+            self.MaxHitPoint = 5
+            self.hitPoint = self.MaxHitPoint
+            self.time = 0
         elif group == 'slime':
             super().__init__(all_sprites, slime, enemy)
             self.hitPoint = 2
@@ -218,6 +294,43 @@ class AnimatedSprite(pygame.sprite.Sprite):
         self.image = self.frames[int(self.cur_frame)]
 
 
+class Particle(pygame.sprite.Sprite):
+    # доделать после дропа хп и денег
+    def __init__(self):
+        super().__init__(all_sprites)
+
+    def update(self):
+        pass
+
+
+def hit(damage, person, repulsion=True):
+    if pygame.time.get_ticks() - Head.time >= 1000:
+        Head.time = pygame.time.get_ticks()
+        Head.hitPoint -= damage
+        if repulsion:
+            person.rect.x, person.rect.y =\
+                person.rect.x - person.x * 10, person.rect.y - person.y * 10
+
+
+def drop(thing, x, y):
+    if 50 <= thing <= 75:  # шанс выпадения хп 0,25
+        sprite = pygame.sprite.Sprite()
+        sprite.image = load_image("heart.png")
+        sprite.rect = sprite.image.get_rect()
+        sprite.rect.x, sprite.rect.y = x, y
+        all_sprites.add(sprite)
+        healing.add(sprite)
+        loot.add(sprite)
+    elif 75 <= thing <= 100:  # шанс выпадения щиток 0,25
+        sprite = pygame.sprite.Sprite()
+        sprite.image = load_image("shield.png")
+        sprite.rect = sprite.image.get_rect()
+        sprite.rect.x, sprite.rect.y = x, y
+        all_sprites.add(sprite)
+        shield.add(sprite)
+        loot.add(sprite)
+
+
 def collision_calculation(person, group='None'):
     if group == 'slime':
         person.zeroing()
@@ -230,34 +343,33 @@ def collision_calculation(person, group='None'):
         elif Body.rect.y < person.rect.y:
             person.y = -3
         if pygame.sprite.spritecollideany(person, hero):
-            Head.hitPoint -= 1
-            person.rect.x, person.rect.y = person.rect.x - person.x * 15, person.rect.y - person.y * 15
+            hit(1, person)
         elif pygame.sprite.spritecollideany(person, bullets):
             person.hitPoint -= player_bullet_damage
             pygame.sprite.groupcollide(slime, bullets, False, True)
         if person.hitPoint == 0:
+            drop(randint(0, 100), person.rect.centerx, person.rect.centery)
             person.kill()
     if group == 'bullet' and (pygame.sprite.spritecollideany(person, boxes)
                               or pygame.sprite.spritecollideany(person, walls)):
         person.kill()
     if pygame.sprite.spritecollideany(person, walls):
+        # if pygame.sprite.spritecollideany(person, vertical_walls) and
+        # 320 < person.rect.y < 380 and person.rect.x > 500:
+        #     return
         if pygame.sprite.spritecollideany(person, vertical_walls) \
                 and pygame.sprite.spritecollideany(person, horizontal_walls):
             if person.rect.x < 500 and person.rect.y < 500 and person.x <= 0 and person.y <= 0:
                 person.zeroing()
-            if person.rect.x < 500 and person.rect.y > 500 and person.x <= 0 and person.y >= 0:
+            if person.rect.x < 500 < person.rect.y and person.x <= 0 <= person.y:
                 person.zeroing()
             if person.rect.x > 500 and person.rect.y > 500 and person.x >= 0 and person.y >= 0:
                 person.zeroing()
-            if person.rect.x > 500 and person.rect.y < 500 and person.x >= 0 and person.y <= 0:
+            if person.rect.x > 500 > person.rect.y and person.x >= 0 >= person.y:
                 person.zeroing()
-        if person.y > 0:
+        if person.y != 0:
             person.check('y', -person.y * 2)
-        if person.y < 0:
-            person.check('y', -person.y * 2)
-        if person.x > 0:
-            person.check('x', -person.x * 2)
-        if person.x < 0:
+        if person.x != 0:
             person.check('x', -person.x * 2)
     if pygame.sprite.spritecollideany(person, boxes):
         if person.y > 0:
@@ -268,6 +380,13 @@ def collision_calculation(person, group='None'):
             person.check('x', -person.x * 2, box=True)
         if person.x < 0:
             person.check('x', -person.x * 2, box=True)
+    if person in hero and pygame.sprite.spritecollideany(person, healing):
+        pygame.sprite.groupcollide(hero, healing, False, True)
+        if Head.hitPoint + 1 <= Head.MaxHitPoint:
+            Head.hitPoint += 1
+    elif person in hero and pygame.sprite.spritecollideany(person, shield):
+        pygame.sprite.groupcollide(hero, shield, False, True)
+        Head.hitPoint += 1
 
 
 def terminate():
@@ -352,26 +471,70 @@ def create_player(x, y):
     Head = AnimatedSprite(load_image("OnlyHead.png", -2), 4, 4, x, y, group='hero')
 
 
-AnimatedSprite(load_image('slime.png'), 7, 1, 600, 600, group='slime')
-flag = True
+def generation_room(first_generation=False): # генерация комнаты
+    global shot_flag, left_door, right_door, generation_room_flag
+    [_.kill() for _ in thorns]
+    [_.kill() for _ in boxes]
+    [_.kill() for _ in loot]
+    if not first_generation:    # если комната генерируется впервые, то группы со спрайтами очищать не надо
+        boxes.empty()
+        thorns.empty()
+        slime.empty()
+        enemy.empty()
+        box_thorns.empty()
+        boxes.empty()
+        bullets.empty()
+    shot_flag = True    # генерируем все объекты комнаты кроме героя
+    left_door = Door()
+    right_door = Door(True)
+    Body.rect.x = Head.rect.x = 150
+    Body.rect.y = Head.rect.y = 350
+    [Box() for _ in range(5)]
+    [Thorns() for _ in range(3)]
+    AnimatedSprite(load_image('slime.png'), 7, 1, 600, 600, group='slime')
+    boxes.update()
+    generation_room_flag = True
+
+
+def draw():
+    walls.draw(screen)
+    box_thorns.draw(screen)
+    loot.draw(screen)
+    enemy.draw(screen)
+    doors.draw(screen)
+    bullets.draw(screen)
+    hero.draw(screen)
+    hearts.draw(screen)
+
+
+first_generation = True
+generation_room_flag = False
 create_player(300, 300)
 [Heart(_) for _ in range(1, 6)]
 running = True
 while running:
+    if not generation_room_flag:
+        generation_room(first_generation)
+        first_generation = False
     player_moved()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         if event.type == SHOT_EVENT:
-            flag = True
-        if (event.type == SHOT_EVENT or flag) and head_control:
-            flag = False
+            shot_flag = True
+        if (event.type == SHOT_EVENT or shot_flag) and head_control:
+            shot_flag = False
             attack(Head.route)
     screen.blit(fon, (100, 125))
-    all_sprites.draw(screen)
+    draw()
     [collision_calculation(_, 'bullet') for _ in bullets]
     [collision_calculation(_, 'slime') for _ in slime]
     collision_calculation(Head)
+    right_door.interaction()
+    left_door.close_door()
+    right_door.close_door(True)
+    if not slime:
+        right_door.open_door()
     Body.x, Body.y = Head.x, Head.y
     all_sprites.update()
     pygame.display.flip()
