@@ -16,6 +16,7 @@ player_bullet_damage = 1
 SHOT_EVENT = pygame.USEREVENT + 1
 pygame.time.set_timer(SHOT_EVENT, 1000)
 thorns = pygame.sprite.Group()
+sprite_money = pygame.sprite.Group()
 slime = pygame.sprite.Group()
 enemy = pygame.sprite.Group()
 loot = pygame.sprite.Group()
@@ -66,6 +67,7 @@ class Heart(pygame.sprite.Sprite):  # класс овечающий за хп
         elif Head.hitPoint >= Head.MaxHitPoint:
             self.image = Heart.shield
         self.rect = self.image.get_rect()
+        self.rect.y = 5
         self.rect.x = posx * Heart.heart.get_width()
 
     def update(self):
@@ -233,6 +235,7 @@ class AnimatedSprite(pygame.sprite.Sprite):
             self.MaxHitPoint = 5
             self.hitPoint = self.MaxHitPoint
             self.time = 0
+            self.money = 0
         elif group == 'slime':
             super().__init__(all_sprites, slime, enemy)
             self.hitPoint = 2
@@ -313,21 +316,21 @@ def hit(damage, person, repulsion=True):
 
 
 def drop(thing, x, y):
-    if 50 <= thing <= 75:  # шанс выпадения хп 0,25
-        sprite = pygame.sprite.Sprite()
+    sprite = pygame.sprite.Sprite()
+    sprite.image = False
+    if 0 <= thing <= 75:   # шанс выпадения денег 0,25
+        sprite.image = load_image("money.png", -2)
+        sprite_money.add(sprite)
+    elif 75 <= thing <= 90:  # шанс выпадения хп 0,15
         sprite.image = load_image("heart.png")
-        sprite.rect = sprite.image.get_rect()
-        sprite.rect.x, sprite.rect.y = x, y
-        all_sprites.add(sprite)
         healing.add(sprite)
-        loot.add(sprite)
-    elif 75 <= thing <= 100:  # шанс выпадения щиток 0,25
-        sprite = pygame.sprite.Sprite()
+    elif 90 <= thing <= 100:  # шанс выпадения щиток 0,10
         sprite.image = load_image("shield.png")
+        shield.add(sprite)
+    if sprite.image:
         sprite.rect = sprite.image.get_rect()
         sprite.rect.x, sprite.rect.y = x, y
         all_sprites.add(sprite)
-        shield.add(sprite)
         loot.add(sprite)
 
 
@@ -387,6 +390,9 @@ def collision_calculation(person, group='None'):
     elif person in hero and pygame.sprite.spritecollideany(person, shield):
         pygame.sprite.groupcollide(hero, shield, False, True)
         Head.hitPoint += 1
+    elif person in hero and pygame.sprite.spritecollideany(person, sprite_money):
+        pygame.sprite.groupcollide(hero, sprite_money, False, True)
+        Head.money += randint(1, 2)
 
 
 def terminate():
@@ -512,7 +518,11 @@ generation_room_flag = False
 create_player(300, 300)
 [Heart(_) for _ in range(1, 6)]
 running = True
+image_money = load_image('money.png', -2)
 while running:
+    pygame.font.init()
+    font = pygame.font.Font(None, 50)
+    text = font.render(str(Head.money), True, (255, 255, 255))
     if not generation_room_flag:
         generation_room(first_generation)
         first_generation = False
@@ -526,7 +536,10 @@ while running:
             shot_flag = False
             attack(Head.route)
     screen.blit(fon, (100, 125))
+    screen.blit(text, (10, 50))
     draw()
+    screen.blit(image_money, (30, 35))
+    screen.blit(text, (70, 35))
     [collision_calculation(_, 'bullet') for _ in bullets]
     [collision_calculation(_, 'slime') for _ in slime]
     collision_calculation(Head)
