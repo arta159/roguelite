@@ -16,6 +16,7 @@ player_bullet_damage = 1
 SHOT_EVENT = pygame.USEREVENT + 1
 pygame.time.set_timer(SHOT_EVENT, 1000)
 thorns = pygame.sprite.Group()
+particles = pygame.sprite.Group()
 sprite_money = pygame.sprite.Group()
 slime = pygame.sprite.Group()
 enemy = pygame.sprite.Group()
@@ -298,18 +299,38 @@ class AnimatedSprite(pygame.sprite.Sprite):
 
 
 class Particle(pygame.sprite.Sprite):
-    # доделать после дропа хп и денег
-    def __init__(self):
-        super().__init__(all_sprites)
+    def __init__(self, pos, color='black'):
+        super().__init__(all_sprites, particles)
+        size = randint(5, 9)
+        image = pygame.Surface([size, size])
+        pygame.draw.circle(image, color, (0, 0), size // 2)
+        image.set_colorkey('black')
+        self.pos = pos
+        self.image = image
+        self.rect = self.image.get_rect()
+        self.velocity = [randint(-5, 6), randint(-5, 6)]
+        self.rect.x, self.rect.y = pos
+        self.gravity = 5
 
     def update(self):
-        pass
+        self.velocity[1] += self.gravity
+        self.rect.x += self.velocity[0]
+        self.rect.y += self.velocity[1]
+        if self.rect.y - self.pos[1] >= 60:
+            self.kill()
+
+
+def create_particles(position, color):
+    particle_count = 20
+    for _ in range(particle_count):
+        Particle(position, color)
 
 
 def hit(damage, person, repulsion=True):
     if pygame.time.get_ticks() - Head.time >= 1000:
         Head.time = pygame.time.get_ticks()
         Head.hitPoint -= damage
+        create_particles((Head.rect.centerx, Head.rect.centery), 'red')
         if repulsion:
             person.rect.x, person.rect.y =\
                 person.rect.x - person.x * 10, person.rect.y - person.y * 10
@@ -349,12 +370,14 @@ def collision_calculation(person, group='None'):
             hit(1, person)
         elif pygame.sprite.spritecollideany(person, bullets):
             person.hitPoint -= player_bullet_damage
+            create_particles((person.rect.centerx, person.rect.centery), 'green')
             pygame.sprite.groupcollide(slime, bullets, False, True)
         if person.hitPoint == 0:
             drop(randint(0, 100), person.rect.centerx, person.rect.centery)
             person.kill()
     if group == 'bullet' and (pygame.sprite.spritecollideany(person, boxes)
                               or pygame.sprite.spritecollideany(person, walls)):
+        create_particles((person.rect.x, person.rect.y), (139, 69, 19))
         person.kill()
     if pygame.sprite.spritecollideany(person, walls):
         # if pygame.sprite.spritecollideany(person, vertical_walls) and
@@ -511,6 +534,7 @@ def draw():
     bullets.draw(screen)
     hero.draw(screen)
     hearts.draw(screen)
+    particles.draw(screen)
 
 
 first_generation = True
