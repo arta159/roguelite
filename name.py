@@ -3,6 +3,7 @@ import sys
 import pygame
 from random import randint
 
+# добавлена генерация комнат по ткст файлу
 all_sprites = pygame.sprite.Group()
 WIDTH = 1000
 HEIGHT = 800
