@@ -552,6 +552,7 @@ def generation_room(first_generation=False): # генерация комнаты
 def draw():
     walls.draw(screen)
     box_thorns.draw(screen)
+    # rrr
     loot.draw(screen)
     enemy.draw(screen)
     doors.draw(screen)
