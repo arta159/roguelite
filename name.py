@@ -84,6 +84,7 @@ class Wall(pygame.sprite.Sprite):
         if direction == 'left':
             self.rect.left = 0
             self.add(vertical_walls)
+            self.rect.size = (70, 800)
         if direction == 'bottom':
             self.rect.x = 100
             self.rect.y = 673
@@ -91,29 +92,25 @@ class Wall(pygame.sprite.Sprite):
         if direction == 'top':
             self.rect.x = 100
             self.rect.y = 0
+            self.rect.size = (800, 85)
             self.add(horizontal_walls)
 
 
 class Box(pygame.sprite.Sprite):
-    box = pygame.transform.scale(load_image('box1.png'), (50, 50))
+    box = pygame.transform.scale(load_image('box2.png'), (70, 70))
 
-    def __init__(self, image=False):
+    def __init__(self, i, j, image=False):
         if image:
             self.image = image
             group = thorns
         else:
             self.image = Box.box
             group = boxes
-        super().__init__(all_sprites, group)
+        super().__init__(all_sprites, group, box_thorns)
         self.rect = self.image.get_rect()
-        self.rect.size = (120, 160)
-        self.rect.x = randint(110, 790)
-        self.rect.y = randint(130, 550)
-        self.mask = pygame.mask.from_surface(self.image)
-        while pygame.sprite.spritecollideany(self, box_thorns):
-            self.rect.x = randint(110, 790)
-            self.rect.y = randint(130, 550)
-        self.add(box_thorns)
+        self.rect.size = (40, 30)
+        self.rect.x = 100 + 50 * j
+        self.rect.y = 125 + 50 * i
 
     def update(self):
         self.rect.size = (50, 50)
@@ -123,8 +120,8 @@ class Thorns(Box):
     thorn_im = pygame.transform.scale(load_image('thorns2.png', -2), (50, 50))
     thorn_activated = pygame.transform.scale(load_image('thorns3.png'), (50, 50))
 
-    def __init__(self):
-        super().__init__(Thorns.thorn_im)
+    def __init__(self, i, j):
+        super().__init__(i, j, Thorns.thorn_im)
         self.push_thorns = False
         self.time = 0
 
@@ -138,7 +135,6 @@ class Thorns(Box):
         if self.time and pygame.time.get_ticks() - self.time >= 3000:
             self.time = 0
             self.image = Thorns.thorn_im
-        # self.image = Thorns.thorn_activated
 
 
 Wall('left')
@@ -205,8 +201,6 @@ class Door(pygame.sprite.Sprite):
             self.time = pygame.time.get_ticks()
 
     def interaction(self):
-        # if self.close and pygame.sprite.collide_mask(self, Body) and Head.x > 0:
-        #     Head.x = 0
         if pygame.sprite.collide_mask(self, Body) and not self.close_flag:
             generation_room()
             self.close = True
@@ -216,8 +210,10 @@ class AnimatedSprite(pygame.sprite.Sprite):
     def __init__(self, sheet, columns, rows, x, y, speed_x=0, speed_y=0, group='none', size=2):
         if group == 'bullets':
             super().__init__(all_sprites, bullets)
+            size = 1.5
         elif group == 'hero':
             super().__init__(all_sprites, hero)
+            self.flag_hero = False
             self.hitPoint = 5
         elif group == 'slime':
             super().__init__(all_sprites, slime, enemy)
@@ -226,13 +222,19 @@ class AnimatedSprite(pygame.sprite.Sprite):
             super().__init__(all_sprites)
         self.x, self.y = x, y
         self.columns = columns
-        sheet = pygame.transform.scale(sheet, (sheet.get_width() * size, sheet.get_height() * size))
+        print(sheet.get_width(), sheet.get_height())
+        if group == 'bullets':
+            sheet = pygame.transform.scale(sheet, (120, 30))
+        else:
+            sheet = pygame.transform.scale(sheet, (sheet.get_width() * size, sheet.get_height() * size))
+        print(sheet.get_width(), sheet.get_height())
         self.route = 0
         self.frames = []
         self.cut_sheet(sheet, columns, rows)
         self.cur_frame = 0
         self.image = self.frames[self.cur_frame]
-        # self.x, self.y = speed_x, speed_y
+        if group == 'hero':
+            self.rect.size = (60, 80)
         self.rect = self.rect.move(self.x, self.y)
         self.x, self.y = speed_x, speed_y
 
@@ -247,12 +249,12 @@ class AnimatedSprite(pygame.sprite.Sprite):
         if not box:
             if axis == 'y':
                 self.rect.y += bias
-                if not pygame.sprite.spritecollideany(self, walls):  # or not pygame.sprite.spritecollideany(self, boxes):
+                if not pygame.sprite.spritecollideany(self, walls):
                     self.y = 0
                 self.rect.y -= bias
             else:
                 self.rect.x += bias
-                if not pygame.sprite.spritecollideany(self, walls):  # or not pygame.sprite.spritecollideany(self, boxes):
+                if not pygame.sprite.spritecollideany(self, walls):
                     self.x = 0
                 self.rect.x -= bias
         if box:
@@ -260,18 +262,28 @@ class AnimatedSprite(pygame.sprite.Sprite):
                 self.rect.y += bias
                 if not pygame.sprite.spritecollideany(self, boxes):
                     self.y = 0
+                    if bias < 0 and self in hero:
+                        self.flag_hero = True
                 self.rect.y -= bias
             else:
                 self.rect.x += bias
-                if not pygame.sprite.spritecollideany(self, boxes):  # or not pygame.sprite.spritecollideany(self, boxes):
+                if not pygame.sprite.spritecollideany(self, boxes):
                     self.x = 0
                 self.rect.x -= bias
+            if self in hero and self.flag_hero:
+                if pygame.sprite.spritecollideany(self, boxes):
+                    self.rect.y -= 10
+                    if pygame.sprite.spritecollideany(self, boxes):
+                        self.flag_hero = False
+                    self.rect.y += 10
+                else:
+                    self.flag_hero = False
 
     def zeroing(self):
         self.x = 0
         self.y = 0
 
-    def update(self, bullet=False):
+    def update(self):
         self.rect = self.rect.move(self.x, self.y)
         if self.x == 0 and self.y == 0 and self in hero:
             self.cur_frame = 0 + self.route
@@ -281,6 +293,7 @@ class AnimatedSprite(pygame.sprite.Sprite):
 
 
 def collision_calculation(person, group='None'):
+    flag = False
     if group == 'slime':
         person.zeroing()
         if Body.rect.x > person.rect.x:
@@ -299,35 +312,33 @@ def collision_calculation(person, group='None'):
             pygame.sprite.groupcollide(slime, bullets, False, True)
         if person.hitPoint == 0:
             person.kill()
-    if group == 'bullet' and (pygame.sprite.spritecollideany(person, boxes)
-                              or pygame.sprite.spritecollideany(person, walls)):
-        person.kill()
+    if group == 'bullet':
+        for i in boxes:
+            i.rect.size = (45, 45)
+        if pygame.sprite.spritecollideany(person, boxes) or pygame.sprite.spritecollideany(person, walls):
+            person.kill()
+            boxes.update()
     if pygame.sprite.spritecollideany(person, walls):
-        # if pygame.sprite.spritecollideany(person, vertical_walls) and 320 < person.rect.y < 380 and person.rect.x > 500:
-        #     return
         if pygame.sprite.spritecollideany(person, vertical_walls) \
                 and pygame.sprite.spritecollideany(person, horizontal_walls):
-            if person.rect.x < 500 and person.rect.y < 500 and person.x <= 0 and person.y <= 0:
-                person.zeroing()
-            if person.rect.x < 500 and person.rect.y > 500 and person.x <= 0 and person.y >= 0:
-                person.zeroing()
-            if person.rect.x > 500 and person.rect.y > 500 and person.x >= 0 and person.y >= 0:
-                person.zeroing()
-            if person.rect.x > 500 and person.rect.y < 500 and person.x >= 0 and person.y <= 0:
+            if (person.rect.x < 500 and person.rect.y < 500 and person.x <= 0 and person.y <= 0) or \
+                    person.rect.x < 500 and person.rect.y > 500 and person.x <= 0 and person.y >= 0 or \
+                    person.rect.x > 500 and person.rect.y > 500 and person.x >= 0 and person.y >= 0 or \
+                    person.rect.x > 500 and person.rect.y < 500 and person.x >= 0 and person.y <= 0:
                 person.zeroing()
         if person.y != 0:
             person.check('y', -person.y * 2)
         if person.x != 0:
             person.check('x', -person.x * 2)
+        flag = True
     if pygame.sprite.spritecollideany(person, boxes):
-        if person.y > 0:
+        if person.y != 0:
             person.check('y', -person.y * 2, box=True)
-        if person.y < 0:
-            person.check('y', -person.y * 2, box=True)
-        if person.x > 0:
+        if person.x != 0:
             person.check('x', -person.x * 2, box=True)
-        if person.x < 0:
-            person.check('x', -person.x * 2, box=True)
+        flag = True
+    if not flag and person in hero:
+        person.flag_hero = False
 
 
 def terminate():
@@ -388,9 +399,9 @@ def player_moved():
         Body.route = 8
         Body.x = speed_player
         Head.x = speed_player
-    if (pygame.key.get_pressed()[pygame.K_d] and pygame.key.get_pressed()[pygame.K_LEFT]) or\
-            (pygame.key.get_pressed()[pygame.K_a] and pygame.key.get_pressed()[pygame.K_RIGHT]) or\
-            (pygame.key.get_pressed()[pygame.K_s] and pygame.key.get_pressed()[pygame.K_UP]) or\
+    if (pygame.key.get_pressed()[pygame.K_d] and pygame.key.get_pressed()[pygame.K_LEFT]) or \
+            (pygame.key.get_pressed()[pygame.K_a] and pygame.key.get_pressed()[pygame.K_RIGHT]) or \
+            (pygame.key.get_pressed()[pygame.K_s] and pygame.key.get_pressed()[pygame.K_UP]) or \
             (pygame.key.get_pressed()[pygame.K_w] and pygame.key.get_pressed()[pygame.K_DOWN]):
         Body.route = Head.route
     if not pygame.key.get_pressed()[pygame.K_w] and not pygame.key.get_pressed()[pygame.K_s]:
@@ -399,7 +410,7 @@ def player_moved():
     if not pygame.key.get_pressed()[pygame.K_a] and not pygame.key.get_pressed()[pygame.K_d]:
         Body.x = 0
         Head.x = 0
-    if not pygame.key.get_pressed()[pygame.K_UP] and not pygame.key.get_pressed()[pygame.K_DOWN]\
+    if not pygame.key.get_pressed()[pygame.K_UP] and not pygame.key.get_pressed()[pygame.K_DOWN] \
             and not pygame.key.get_pressed()[pygame.K_LEFT] and not pygame.key.get_pressed()[pygame.K_RIGHT]:
         head_control = False
     if not head_control:
@@ -412,9 +423,23 @@ def create_player(x, y):
     Head = AnimatedSprite(load_image("OnlyHead.png", -2), 4, 4, x, y, group='hero')
 
 
-def generation_room(first_generation=False): # генерация комнаты
+def create_map():
+    filename = "data/" + 'map1.txt'
+    if not os.path.isfile(filename):
+        print(f"Файл с уровнем '{filename}' не найден")
+    with open(filename, 'r') as mapFile:
+        level_map = [line.strip() for line in mapFile]
+    for num, i in enumerate(level_map):
+        for num2, j in enumerate(i):
+            if j == '#':
+                Box(num, num2)
+            if j == '*':
+                Thorns(num, num2)
+
+
+def generation_room(first_generation=False):  # генерация комнаты
     global shot_flag, left_door, right_door, generation_room_flag
-    if not first_generation: # если комната генерируется впервые, то группы со спрайтами очищать не надо
+    if not first_generation:  # если комната генерируется впервые, то группы со спрайтами очищать не надо
         boxes.empty()
         thorns.empty()
         slime.empty()
@@ -422,24 +447,29 @@ def generation_room(first_generation=False): # генерация комнаты
         box_thorns.empty()
         boxes.empty()
         bullets.empty()
-    shot_flag = True # генерируем все объекты комнаты кроме героя
+    shot_flag = True  # генерируем все объекты комнаты кроме героя
     left_door = Door()
     right_door = Door(True)
     Body.rect.x = Head.rect.x = 150
     Body.rect.y = Head.rect.y = 350
-    [Box() for _ in range(5)]
-    [Thorns() for _ in range(3)]
+    create_map()
     AnimatedSprite(load_image('slime.png'), 7, 1, 600, 600, group='slime')
     boxes.update()
     generation_room_flag = True
 
+
 def draw():
     walls.draw(screen)
-    box_thorns.draw(screen)
-    hero.draw(screen)
-    enemy.draw(screen)
     doors.draw(screen)
+    if Head.flag_hero:
+        hero.draw(screen)
+        box_thorns.draw(screen)
+    else:
+        box_thorns.draw(screen)
+        hero.draw(screen)
+    enemy.draw(screen)
     bullets.draw(screen)
+    hearts.draw(screen)
 
 
 first_generation = True
