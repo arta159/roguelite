@@ -33,6 +33,8 @@ healing = pygame.sprite.Group()
 shield = pygame.sprite.Group()
 walls = pygame.sprite.Group()
 doors = pygame.sprite.Group()
+first_generation = True
+generation_room_flag = False
 
 
 def load_image(name, color_key=None):
@@ -50,9 +52,6 @@ def load_image(name, color_key=None):
     else:
         image = image.convert().convert_alpha()
     return image
-
-
-fon = pygame.transform.scale(load_image('floor.jpg'), (800, 550))
 
 
 class Heart(pygame.sprite.Sprite):  # класс овечающий за хп
@@ -75,6 +74,7 @@ class Heart(pygame.sprite.Sprite):  # класс овечающий за хп
     def update(self):
         if Head.hitPoint <= 0:
             [_.kill() for _ in hero]
+            start_game()
         [_.kill() for _ in hearts]
         [Heart(_) for _ in range(1, 6)]
         if Head.hitPoint >= Head.MaxHitPoint:
@@ -152,12 +152,6 @@ class Thorns(Box):
         if self.time and pygame.time.get_ticks() - self.time >= 3000:
             self.time = 0
             self.image = Thorns.thorn_im
-
-
-Wall('left')
-Wall('right')
-Wall('top')
-Wall('bottom')
 
 
 class Door(pygame.sprite.Sprite):
@@ -561,12 +555,23 @@ def draw():
     particles.draw(screen)
 
 
-first_generation = True
-generation_room_flag = False
-create_player(300, 300)
-[Heart(_) for _ in range(1, 6)]
-running = True
+def start_game():
+    global first_generation, generation_room_flag
+    [_.kill() for _ in all_sprites]
+    Wall('left')
+    Wall('right')
+    Wall('top')
+    Wall('bottom')
+    first_generation = True
+    generation_room_flag = False
+    create_player(300, 300)
+    [Heart(_) for _ in range(1, 6)]
+
+
+start_game()
 image_money = load_image('money.png', -2)
+fon = pygame.transform.scale(load_image('floor.jpg'), (800, 550))
+running = True
 while running:
     pygame.font.init()
     font = pygame.font.Font(None, 50)
