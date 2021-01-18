@@ -1,6 +1,7 @@
 import os
 import sys
 import pygame
+import math
 from random import randint
 
 # добавлена генерация комнат по ткст файлу
@@ -17,13 +18,16 @@ player_bullet_damage = 1
 SHOT_EVENT = pygame.USEREVENT + 1
 pygame.time.set_timer(SHOT_EVENT, 1000)
 thorns = pygame.sprite.Group()
+enemy2 = pygame.sprite.Group()
 particles = pygame.sprite.Group()
 sprite_money = pygame.sprite.Group()
+enemy1 = pygame.sprite.Group()
 slime = pygame.sprite.Group()
 enemy = pygame.sprite.Group()
 box_thorns = pygame.sprite.Group()
 boxes = pygame.sprite.Group()
 bullets = pygame.sprite.Group()
+bullets_enemy = pygame.sprite.Group()
 loot = pygame.sprite.Group()
 hero = pygame.sprite.Group()
 horizontal_walls = pygame.sprite.Group()
@@ -148,7 +152,7 @@ class Thorns(Box):
             self.time = pygame.time.get_ticks()
             self.push_thorns = False
         if self.time and pygame.sprite.collide_mask(self, Head):
-            hit(1, self, False)
+            hit(1)
         if self.time and pygame.time.get_ticks() - self.time >= 3000:
             self.time = 0
             self.image = Thorns.thorn_im
@@ -222,6 +226,8 @@ class AnimatedSprite(pygame.sprite.Sprite):
         if group == 'bullets':
             super().__init__(all_sprites, bullets)
             size = 1.5
+        elif group == 'bullets_enemy':
+            super().__init__(all_sprites, bullets_enemy)
         elif group == 'hero':
             super().__init__(all_sprites, hero)
             self.flag_hero = False
@@ -229,6 +235,14 @@ class AnimatedSprite(pygame.sprite.Sprite):
             self.hitPoint = self.MaxHitPoint
             self.time = 0
             self.money = 0
+        elif group == 'enemy1':
+            super().__init__(all_sprites, enemy1, enemy)
+            self.hitPoint = 3
+            self.time = 0
+        elif group == 'enemy2':
+            super().__init__(all_sprites, enemy2, enemy)
+            self.hitPoint = 3
+            self.time = 0
         elif group == 'slime':
             super().__init__(all_sprites, slime, enemy)
             self.hitPoint = 2
@@ -332,12 +346,12 @@ def create_particles(position, color):
         Particle(position, color)
 
 
-def hit(damage, person, repulsion=True):
+def hit(damage, person=False):
     if pygame.time.get_ticks() - Head.time >= 1000:
         Head.time = pygame.time.get_ticks()
         Head.hitPoint -= damage
         create_particles((Head.rect.centerx, Head.rect.centery), 'red')
-        if repulsion:
+        if person:
             person.rect.x, person.rect.y =\
                 person.rect.x - person.x * 10, person.rect.y - person.y * 10
 
@@ -361,28 +375,11 @@ def drop(thing, x, y):
         loot.add(sprite)
 
 
-def collision_calculation(person, group='None'):
+def collision_calculation(person):
     flag = False
-    if group == 'slime':
-        person.zeroing()
-        if Body.rect.x > person.rect.x:
-            person.x = 3
-        elif Body.rect.x < person.rect.x:
-            person.x = -3
-        if Body.rect.y > person.rect.y:
-            person.y = 3
-        elif Body.rect.y < person.rect.y:
-            person.y = -3
-        if pygame.sprite.spritecollideany(person, hero):
-            hit(1, person)
-        elif pygame.sprite.spritecollideany(person, bullets):
-            person.hitPoint -= player_bullet_damage
-            create_particles((person.rect.centerx, person.rect.centery), 'green')
-            pygame.sprite.groupcollide(slime, bullets, False, True)
-        if person.hitPoint == 0:
-            drop(randint(0, 100), person.rect.centerx, person.rect.centery)
-            person.kill()
-    if group == 'bullet':
+    if person in enemy:
+        enemy_moved(person)
+    if person in bullets or person in bullets_enemy:
         for i in boxes:
             i.rect.size = (45, 45)
         if pygame.sprite.spritecollideany(person, boxes) or pygame.sprite.spritecollideany(person, walls):
@@ -410,6 +407,9 @@ def collision_calculation(person, group='None'):
         flag = True
     if not flag and person in hero:
         person.flag_hero = False
+    if person in hero and pygame.sprite.spritecollideany(person, bullets_enemy):
+        pygame.sprite.groupcollide(hero, bullets_enemy, False, True)
+        hit(1)
     if person in hero and pygame.sprite.spritecollideany(person, healing):
         pygame.sprite.groupcollide(hero, healing, False, True)
         if Head.hitPoint + 1 <= Head.MaxHitPoint:
@@ -440,6 +440,102 @@ def attack(route):
     elif route == 8:
         AnimatedSprite(load_image("ball_2.png", -2), 4, 1, Body.rect.centerx, Body.rect.centery,
                        speed_x=player_bullet_speed, speed_y=0, group='bullets', size=2)
+
+
+def enemy_moved(person):
+    person.zeroing()
+    if person in slime:
+        if Body.rect.x > person.rect.x:
+            person.x = 3
+        elif Body.rect.x < person.rect.x:
+            person.x = -3
+        if Body.rect.y > person.rect.y:
+            person.y = 3
+        elif Body.rect.y < person.rect.y:
+            person.y = -3
+        if pygame.sprite.spritecollideany(person, hero):
+            hit(1, person)
+        if pygame.sprite.spritecollideany(person, bullets):
+            person.hitPoint -= player_bullet_damage
+            create_particles((person.rect.centerx, person.rect.centery), 'green')
+            pygame.sprite.groupcollide(slime, bullets, False, True)
+        if person.hitPoint == 0:
+            drop(randint(0, 80), person.rect.centerx, person.rect.centery)
+            person.kill()
+    elif person in enemy1:
+        distance_x = math.fabs(Body.rect.x - person.rect.x)
+        distance_y = math.fabs(Body.rect.y - person.rect.y)
+        if distance_x > distance_y:
+            if Body.rect.y > person.rect.y:
+                person.y = 4
+            else:
+                person.y = -4
+        elif distance_y > distance_x:
+            if Body.rect.x > person.rect.x:
+                person.x = 4
+            else:
+                person.x = -4
+        if pygame.sprite.spritecollideany(person, hero):
+            hit(1, person)
+        if pygame.sprite.spritecollideany(person, bullets):
+            person.hitPoint -= player_bullet_damage
+            create_particles((person.rect.centerx, person.rect.centery), 'red')
+            pygame.sprite.groupcollide(enemy1, bullets, False, True)
+        if person.hitPoint == 0:
+            drop(randint(50, 100), person.rect.centerx, person.rect.centery)
+            person.kill()
+        if pygame.time.get_ticks() - person.time >= 1500:
+            person.time = pygame.time.get_ticks()
+            AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
+                           speed_x=10, group='bullets_enemy', size=1)
+            AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
+                           speed_x=-10, group='bullets_enemy', size=1)
+            AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
+                           speed_y=10, group='bullets_enemy', size=1)
+            AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
+                           speed_y=-10, group='bullets_enemy', size=1)
+    elif person in enemy2:
+        distance_x = math.fabs(Body.rect.x - person.rect.x)
+        distance_y = math.fabs(Body.rect.y - person.rect.y)
+        if Body.rect.x - person.rect.x > 0 and Body.rect.y - person.rect.y > 0:
+            if distance_x < distance_y:
+                person.x = -4
+            else:
+                person.x = -4
+        elif Body.rect.x - person.rect.x < 0 < Body.rect.y - person.rect.y:
+            if distance_x < distance_y:
+                person.x = 4
+            else:
+                person.x = -4
+        if Body.rect.x - person.rect.x < 0 and Body.rect.y - person.rect.y < 0:
+            if distance_x < distance_y:
+                person.y = 4
+            else:
+                person.y = 4
+        elif Body.rect.x - person.rect.x > 0 > Body.rect.y - person.rect.y:
+            if distance_x < distance_y:
+                person.y = -4
+            else:
+                person.y = 4
+        if pygame.sprite.spritecollideany(person, hero):
+            hit(1, person)
+        if pygame.sprite.spritecollideany(person, bullets):
+            person.hitPoint -= player_bullet_damage
+            create_particles((person.rect.centerx, person.rect.centery), 'red')
+            pygame.sprite.groupcollide(enemy1, bullets, False, True)
+        if person.hitPoint == 0:
+            drop(randint(50, 100), person.rect.centerx, person.rect.centery)
+            person.kill()
+        if pygame.time.get_ticks() - person.time >= 1500:
+            person.time = pygame.time.get_ticks()
+            AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
+                           speed_x=7, speed_y=7, group='bullets_enemy', size=1)
+            AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
+                           speed_x=7,  speed_y=-7, group='bullets_enemy', size=1)
+            AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
+                           speed_x=-7, speed_y=7, group='bullets_enemy', size=1)
+            AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
+                           speed_x=-7, speed_y=-7, group='bullets_enemy', size=1)
 
 
 def player_moved():
@@ -538,6 +634,8 @@ def generation_room(first_generation=False): # генерация комнаты
     Body.rect.y = Head.rect.y = 350
     create_map()
     AnimatedSprite(load_image('slime.png'), 7, 1, 600, 600, group='slime')
+    AnimatedSprite(load_image('enemy1.png', -2), 4, 1, 600, 150, group='enemy1')
+    AnimatedSprite(load_image('enemy2.png', -2), 4, 1, 600, 300, group='enemy2')
     boxes.update()
     generation_room_flag = True
 
@@ -547,9 +645,10 @@ def draw():
     box_thorns.draw(screen)
     # rrr
     loot.draw(screen)
-    enemy.draw(screen)
     doors.draw(screen)
+    enemy.draw(screen)
     bullets.draw(screen)
+    bullets_enemy.draw(screen)
     hero.draw(screen)
     hearts.draw(screen)
     particles.draw(screen)
@@ -593,13 +692,14 @@ while running:
     draw()
     screen.blit(image_money, (30, 35))
     screen.blit(text, (70, 35))
-    [collision_calculation(_, 'bullet') for _ in bullets]
-    [collision_calculation(_, 'slime') for _ in slime]
+    [collision_calculation(_) for _ in bullets]
+    [collision_calculation(_) for _ in bullets_enemy]
+    [collision_calculation(_) for _ in enemy]
     collision_calculation(Head)
     right_door.interaction()
     left_door.close_door()
     right_door.close_door(True)
-    if not slime:
+    if not enemy:
         right_door.open_door()
     Body.x, Body.y = Head.x, Head.y
     all_sprites.update()
