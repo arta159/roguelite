@@ -11,13 +11,14 @@ HEIGHT = 800
 full_screen = False
 GRAVITY = 5
 speed_player = 7
+rate = 1000
 player_bullet_speed = 15
 screen = pygame.display.set_mode((WIDTH, HEIGHT), vsync=1)
 clock = pygame.time.Clock()
 head_control = False
 player_bullet_damage = 1
 SHOT_EVENT = pygame.USEREVENT + 1
-pygame.time.set_timer(SHOT_EVENT, 1000)
+pygame.time.set_timer(SHOT_EVENT, rate)
 thorns = pygame.sprite.Group()
 buttons = pygame.sprite.Group()
 particles = pygame.sprite.Group()
@@ -31,6 +32,9 @@ box_thorns = pygame.sprite.Group()
 boxes = pygame.sprite.Group()
 bullets = pygame.sprite.Group()
 loot = pygame.sprite.Group()
+rate_of_fire = pygame.sprite.Group()
+golden_heart = pygame.sprite.Group()
+damage = pygame.sprite.Group()
 hero = pygame.sprite.Group()
 horizontal_walls = pygame.sprite.Group()
 vertical_walls = pygame.sprite.Group()
@@ -88,7 +92,7 @@ class Heart(pygame.sprite.Sprite):  # класс овечающий за хп
             pause(['GAME OVER', 'Попробовать снова', f"полноэкранный режим: нет", "Выход"])
             start_game()
         [_.kill() for _ in hearts]
-        [Heart(_) for _ in range(1, 6)]
+        [Heart(_) for _ in range(1, Head.MaxHitPoint + 1)]
         if Head.hitPoint >= Head.MaxHitPoint:
             [Heart(_) for _ in range(1, Head.hitPoint + 1)]
         else:
@@ -466,9 +470,18 @@ def drop(thing, x, y):
     elif 75 <= thing <= 90:  # шанс выпадения хп 0,15
         sprite.image = load_image("heart.png")
         healing.add(sprite)
-    elif 90 <= thing <= 100:  # шанс выпадения щиток 0,10
+    elif 90 <= thing <= 97:  # шанс выпадения щиток 0,10
         sprite.image = load_image("shield.png")
         shield.add(sprite)
+    elif thing == 98:
+        sprite.image = load_image("damage.png")
+        damage.add(sprite)
+    elif thing == 99:
+        sprite.image = load_image("rate_of_fire.png")
+        rate_of_fire.add(sprite)
+    elif thing == 100:
+        sprite.image = load_image("golden_heart.png")
+        golden_heart.add(sprite)
     if sprite.image:
         sprite.rect = sprite.image.get_rect()
         sprite.rect.x, sprite.rect.y = x, y
@@ -519,6 +532,12 @@ def collision_calculation(person):
     if person in hero and pygame.sprite.spritecollideany(person, bullets_enemy):
         pygame.sprite.groupcollide(hero, bullets_enemy, False, True)
         hit(1)
+    if pygame.sprite.spritecollideany(person, loot):
+        drop_collide(person)
+
+
+def drop_collide(person):
+    global rate, player_bullet_damage
     if person in hero and pygame.sprite.spritecollideany(person, healing):
         pygame.sprite.groupcollide(hero, healing, False, True)
         if Head.hitPoint + 1 <= Head.MaxHitPoint:
@@ -529,6 +548,34 @@ def collision_calculation(person):
     elif person in hero and pygame.sprite.spritecollideany(person, sprite_money):
         pygame.sprite.groupcollide(hero, sprite_money, False, True)
         Head.money += randint(1, 2)
+    elif person in hero and pygame.sprite.spritecollideany(person, golden_heart):
+        if room_numbers % 6 == 5 and Head.money - 6 >= 0:
+            pygame.sprite.groupcollide(hero, golden_heart, False, True)
+            Head.MaxHitPoint += 1
+            Head.hitPoint += 1
+            Head.money -= 6
+        elif room_numbers % 6 != 5:
+            pygame.sprite.groupcollide(hero, golden_heart, False, True)
+            Head.MaxHitPoint += 1
+            Head.hitPoint += 1
+    elif person in hero and pygame.sprite.spritecollideany(person, damage):
+        if room_numbers % 6 == 5 and Head.money - 10 >= 0:
+            pygame.sprite.groupcollide(hero, damage, False, True)
+            player_bullet_damage += 1
+            Head.money -= 10
+        elif room_numbers % 6 != 5:
+            pygame.sprite.groupcollide(hero, damage, False, True)
+            player_bullet_damage += 1
+    elif person in hero and pygame.sprite.spritecollideany(person, rate_of_fire):
+        if room_numbers % 6 == 5 and Head.money - 12 >= 0:
+            rate = int(rate * 0.85)
+            pygame.sprite.groupcollide(hero, rate_of_fire, False, True)
+            pygame.time.set_timer(SHOT_EVENT, rate)
+            Head.money -= 12
+        elif room_numbers % 6 != 5:
+            rate = int(rate * 0.85)
+            pygame.sprite.groupcollide(hero, rate_of_fire, False, True)
+            pygame.time.set_timer(SHOT_EVENT, rate)
 
 
 def terminate():
@@ -587,9 +634,6 @@ def enemy_moved(person):
             person.hitPoint -= player_bullet_damage
             create_particles((person.rect.centerx, person.rect.centery), 'red')
             pygame.sprite.groupcollide(enemy1, bullets, False, True)
-        if person.hitPoint == 0:
-            drop(randint(50, 100), person.rect.centerx, person.rect.centery)
-            person.kill()
         if pygame.time.get_ticks() - person.time >= 1500:
             person.time = pygame.time.get_ticks()
             AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
@@ -629,9 +673,6 @@ def enemy_moved(person):
             person.hitPoint -= player_bullet_damage
             create_particles((person.rect.centerx, person.rect.centery), 'red')
             pygame.sprite.groupcollide(enemy2, bullets, False, True)
-        if person.hitPoint == 0:
-            drop(randint(50, 100), person.rect.centerx, person.rect.centery)
-            person.kill()
         if pygame.time.get_ticks() - person.time >= 1500:
             person.time = pygame.time.get_ticks()
             AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
@@ -642,6 +683,9 @@ def enemy_moved(person):
                            speed_x=-7, speed_y=7, group='bullets_enemy', size=1)
             AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
                            speed_x=-7, speed_y=-7, group='bullets_enemy', size=1)
+    if person.hitPoint <= 0:
+        drop(randint(0, 100), person.rect.centerx, person.rect.centery)
+        person.kill()
 
 
 def player_moved():
@@ -724,7 +768,7 @@ def create_map(room_numbers):
 
 
 def generation_room(first_generation=False):  # генерация комнаты
-    global shot_flag, left_door, right_door, generation_room_flag, room_numbers, enemies
+    global shot_flag, left_door, right_door, generation_room_flag, room_numbers, enemies, price
     room_numbers += 1
     [_.kill() for _ in thorns]
     [_.kill() for _ in boxes]
@@ -746,6 +790,7 @@ def generation_room(first_generation=False):  # генерация комнат�
     enemies = []
     if room_numbers % 6 == 0:
         Boss()
+        price = font.render('', True, pygame.Color('orange'))
     else:
         if room_numbers % 6 == 1:
             enemies.append('slime')
@@ -761,6 +806,8 @@ def generation_room(first_generation=False):  # генерация комнат�
             enemies.append('enemy1')
             enemies.append('enemy2')
             enemies.append('bot')
+        if room_numbers % 6 == 5:
+            shop()
     for i in enemies:
         if i == 'bot':
             Bot()
@@ -791,6 +838,15 @@ def draw():
     particles.draw(screen)
 
 
+def shop():
+    global price
+    x = screen.get_size()[0] // 2
+    drop(98, x - 90, 300)
+    drop(99, x, 300)
+    drop(100, x + 90, 300)
+    price = font.render('10    12     6', True, pygame.Color('orange'))
+
+
 def pause(text_pause=None):
     if text_pause is None:
         text_pause = ["Пауза", "Продолжить", f"полноэкранный режим: нет", "Выход"]
@@ -807,10 +863,10 @@ def pause(text_pause=None):
                 terminate()
             elif pygame.key.get_pressed()[pygame.K_ESCAPE]:
                 return
-            elif event.type == pygame.MOUSEBUTTONUP:
-                if 420 <= event.pos[1] <= 460 and size <= event.pos[0] <= size + 200:
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if 420 <= event.pos[1] <= 460 and size <= event.pos[0] <= size + 800:
                     terminate()
-                elif 380 < event.pos[1] <= 420 and size <= event.pos[0] <= size + 200:
+                elif 380 < event.pos[1] <= 420 and size <= event.pos[0] <= size + 800:
                     if not full_screen:
                         full_screen = True
                         text_pause[2] = 'полноэкранный режим: Да'
@@ -821,7 +877,7 @@ def pause(text_pause=None):
                         full_screen = False
                         text_pause[2] = 'полноэкранный режим: Нет'
                         screen = pygame.display.set_mode((WIDTH, HEIGHT), vsync=1)
-                elif 340 <= event.pos[1] <= 380 and size <= event.pos[0] <= size + 100:
+                elif 340 <= event.pos[1] <= 380 and size <= event.pos[0] <= size + 800:
                     pygame.mouse.set_visible(False)
                     return
         pygame.display.flip()
@@ -840,20 +896,20 @@ def start_game():
     first_generation = True
     generation_room_flag = False
     create_player(300, 300)
-    [Heart(_) for _ in range(1, 6)]
+    [Heart(_) for _ in range(1, Head.MaxHitPoint + 1)]
 
 
 pygame.font.init()
 font = pygame.font.SysFont('ComicSansMS', 38)
+price = font.render('', True, pygame.Color('orange'))
 pause(['', 'Начать игру', f"полноэкранный режим: нет", "Выход"])
 start_game()
 first_generation = True
 generation_room_flag = False
-[Heart(_) for _ in range(1, 6)]
 running = True
 image_money = pygame.transform.scale(load_image('money.png', -2), (50, 50))
 while running:
-    text = font.render(str(Head.money), True, pygame.Color('grey'))
+    text = font.render(str(Head.money), True, pygame.Color('orange'))
     if not generation_room_flag:
         generation_room(first_generation)
         first_generation = False
@@ -870,6 +926,7 @@ while running:
             pause()
     screen.blit(fon, (100, 125))
     screen.blit(text, (10, 50))
+    screen.blit(price, (screen.get_size()[0] // 2 - 90, 350))
     draw()
     screen.blit(image_money, (30, 35))
     screen.blit(text, (80, 35))
