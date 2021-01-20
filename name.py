@@ -4,22 +4,29 @@ import pygame
 from random import randint, choice
 import math
 
+
 # добавлена генерация комнат по ткст файлу
 all_sprites = pygame.sprite.Group()
 WIDTH = 1000
 HEIGHT = 800
 GRAVITY = 5
+full_screen = False
 speed_player = 7
+rate = 1000
 player_bullet_speed = 15
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode((WIDTH, HEIGHT), vsync=1)
+pygame.display.set_caption('RogueLite')
 clock = pygame.time.Clock()
 head_control = False
-player_bullet_damage = 1
+player_bullet_damage = 3
 SHOT_EVENT = pygame.USEREVENT + 1
+pygame.time.set_timer(SHOT_EVENT, rate)
 pygame.time.set_timer(SHOT_EVENT, 1000)
 thorns = pygame.sprite.Group()
+buttons = pygame.sprite.Group()
 particles = pygame.sprite.Group()
 sprite_money = pygame.sprite.Group()
+portal_gr = pygame.sprite.Group()
 slime = pygame.sprite.Group()
 enemy = pygame.sprite.Group()
 enemy2 = pygame.sprite.Group()
@@ -29,6 +36,9 @@ box_thorns = pygame.sprite.Group()
 boxes = pygame.sprite.Group()
 bullets = pygame.sprite.Group()
 loot = pygame.sprite.Group()
+rate_of_fire = pygame.sprite.Group()
+golden_heart = pygame.sprite.Group()
+damage = pygame.sprite.Group()
 hero = pygame.sprite.Group()
 horizontal_walls = pygame.sprite.Group()
 vertical_walls = pygame.sprite.Group()
@@ -39,6 +49,9 @@ walls = pygame.sprite.Group()
 doors = pygame.sprite.Group()
 bot = pygame.sprite.Group()
 boss = pygame.sprite.Group()
+bot = pygame.sprite.Group()
+boss = pygame.sprite.Group()
+pygame.mouse.set_visible(False)
 
 
 def load_image(name, color_key=None):
@@ -81,8 +94,11 @@ class Heart(pygame.sprite.Sprite):  # класс овечающий за хп
     def update(self):
         if Head.hitPoint <= 0:
             [_.kill() for _ in hero]
+            screen.fill('black')
+            pause(['GAME OVER', 'Попробовать снова', f"полноэкранный режим: нет", "Выход"])
             start_game()
         [_.kill() for _ in hearts]
+        [Heart(_) for _ in range(1, Head.MaxHitPoint + 1)]
         [Heart(_) for _ in range(1, 6)]
         if Head.hitPoint >= Head.MaxHitPoint:
             [Heart(_) for _ in range(1, Head.hitPoint + 1)]
@@ -93,8 +109,8 @@ class Heart(pygame.sprite.Sprite):  # класс овечающий за хп
 class Wall(pygame.sprite.Sprite):
     d = {'left': pygame.transform.scale(load_image('wall.jpg'), (100, 800)),
          'right': pygame.transform.rotate(pygame.transform.scale(load_image('wall.jpg'), (102, 800)), 180),
-         'bottom': pygame.transform.scale(load_image('wall2.jpg'), (800, 125)),
-         'top': pygame.transform.rotate(pygame.transform.scale(load_image('wall2.jpg'), (800, 125)), 180)}
+         'top': pygame.transform.scale(load_image('wall2.png'), (800, 125)),
+         'bottom': pygame.transform.rotate(pygame.transform.scale(load_image('wall2.png'), (800, 125)), 180)}
 
     def __init__(self, direction):
         super().__init__(walls, all_sprites)
@@ -154,6 +170,8 @@ class Thorns(Box):
             self.image = Thorns.thorn_activated
             self.time = pygame.time.get_ticks()
             self.push_thorns = False
+            pygame.mixer.music.load('data/thorn.mp3')
+            pygame.mixer.music.play()
         if self.time and pygame.sprite.collide_mask(self, Head):
             hit(1)
         if self.time and pygame.time.get_ticks() - self.time >= 3000:
@@ -181,10 +199,15 @@ class Door(pygame.sprite.Sprite):
                  pygame.transform.scale(load_image('door_cl4.png'), (70, 135)),
                  pygame.transform.scale(load_image('door_cl5.png'), (70, 135))]
     door_close = pygame.transform.rotate(open_close_door[-1], 180)
+    portal_im = [pygame.transform.scale(load_image('portal1.png', -2), (70, 135)),
+              pygame.transform.scale(load_image('portal2.png', -2), (70, 135)),
+              pygame.transform.scale(load_image('portal3.png', -2), (70, 135)),
+              pygame.transform.scale(load_image('portal4.png', -2), (70, 135))]
 
-    def __init__(self, right=False):
-        super().__init__(all_sprites, doors)
+    def __init__(self, right=False, portal_flag=False):
+
         if right:
+            super().__init__(all_sprites, doors)
             self.image = Door.door_close
             self.rect = self.image.get_rect()
             self.rect.x = 890
@@ -195,13 +218,21 @@ class Door(pygame.sprite.Sprite):
             self.close = 1
             self.close_flag = True
             self.mask = pygame.mask.from_surface(Door.door_close)
-        else:
+        elif not portal_flag:
+            super().__init__(all_sprites, doors)
             self.image = Door.door_im
             self.rect = self.image.get_rect()
             self.rect.x = 40
             self.rect.y = 330
             self.close = 1
             self.time = pygame.time.get_ticks()
+        if portal_flag:
+            super().__init__(all_sprites, portal_gr)
+            self.image = Door.portal_im[0]
+            self.rect = self.image.get_rect()
+            self.rect.x = 450
+            self.rect.y = 330
+            self.num = 0
 
     def close_door(self, left=False):
         if self.close < 6 and pygame.time.get_ticks() - self.time > 50:
@@ -224,10 +255,19 @@ class Door(pygame.sprite.Sprite):
             self.lights %= 3
             self.time = pygame.time.get_ticks()
 
-    def interaction(self):
+    def interaction(self, portal=False):
+        if portal:
+            self.close_flag = False
         if pygame.sprite.collide_mask(self, Body) and not self.close_flag:
+            pygame.mixer.music.load('data/portal.mp3')
+            pygame.mixer.music.play()
             generation_room()
             self.close = True
+
+    def portal_func(self):
+        self.image = Door.portal_im[self.num % 4]
+        self.num += 1
+        self.interaction(portal=True)
 
 
 class AnimatedSprite(pygame.sprite.Sprite):
@@ -335,7 +375,7 @@ class AnimatedSprite(pygame.sprite.Sprite):
 
 
 class Bot(AnimatedSprite):
-    image = load_image('slime.png')
+    image = load_image('enemy4.png')
 
     def __init__(self, image=False):
         if image:
@@ -361,7 +401,7 @@ class Bot(AnimatedSprite):
             self.y = choice([-4, 4, 0])
             self.x = choice([-4, 4, 0])
         collision_calculation(self)
-        self.rect = self.rect.move(self.x, self.y)
+        super().update()
         if self in bot or (self in boss and self.hitPoint <= self.max_hit_point // 3):
             if pygame.time.get_ticks() - self.time > 1500:
                 self.time = pygame.time.get_ticks()
@@ -399,7 +439,7 @@ class Bot(AnimatedSprite):
 
 
 class Boss(Bot):
-    image = load_image('slime.png')
+    image = load_image('boss.png')
 
     def __init__(self):
         super().__init__(Boss.image)
@@ -461,9 +501,18 @@ def drop(thing, x, y):
     elif 75 <= thing <= 90:  # шанс выпадения хп 0,15
         sprite.image = load_image("heart.png")
         healing.add(sprite)
-    elif 90 <= thing <= 100:  # шанс выпадения щиток 0,10
+    elif 90 <= thing <= 97:  # шанс выпадения щиток 0,10
         sprite.image = load_image("shield.png")
         shield.add(sprite)
+    elif thing == 98:
+        sprite.image = load_image("damage.png")
+        damage.add(sprite)
+    elif thing == 99:
+        sprite.image = load_image("rate_of_fire.png")
+        rate_of_fire.add(sprite)
+    elif thing == 100:
+        sprite.image = load_image("golden_heart.png")
+        golden_heart.add(sprite)
     if sprite.image:
         sprite.rect = sprite.image.get_rect()
         sprite.rect.x, sprite.rect.y = x, y
@@ -477,9 +526,12 @@ def collision_calculation(person):
     if person in enemy:
         if pygame.sprite.spritecollideany(person, bullets):
             person.hitPoint -= player_bullet_damage
-            create_particles((person.rect.centerx, person.rect.centery), 'green')
+            if person in bot or person in boss:
+                create_particles((person.rect.centerx, person.rect.centery), 'red')
+            else:
+                create_particles((person.rect.centerx, person.rect.centery), 'green')
             pygame.sprite.groupcollide(enemy, bullets, False, True)
-        if person.hitPoint == 0:
+        if person.hitPoint <= 0:
             drop(randint(0, 100), person.rect.centerx, person.rect.centery)
             person.kill()
     flag = False
@@ -513,7 +565,15 @@ def collision_calculation(person):
         person.flag_hero = False
     if person in hero and pygame.sprite.spritecollideany(person, bullets_enemy):
         pygame.sprite.groupcollide(hero, bullets_enemy, False, True)
+        pygame.mixer.music.load('data/hit.mp3')
+        pygame.mixer.music.play()
         hit(1)
+    if pygame.sprite.spritecollideany(person, loot):
+        drop_collide(person)
+
+
+def drop_collide(person):
+    global rate, player_bullet_damage
     if person in hero and pygame.sprite.spritecollideany(person, healing):
         pygame.sprite.groupcollide(hero, healing, False, True)
         if Head.hitPoint + 1 <= Head.MaxHitPoint:
@@ -524,6 +584,34 @@ def collision_calculation(person):
     elif person in hero and pygame.sprite.spritecollideany(person, sprite_money):
         pygame.sprite.groupcollide(hero, sprite_money, False, True)
         Head.money += randint(1, 2)
+    elif person in hero and pygame.sprite.spritecollideany(person, golden_heart):
+        if room_numbers % 6 == 5 and Head.money - 6 >= 0:
+            pygame.sprite.groupcollide(hero, golden_heart, False, True)
+            Head.MaxHitPoint += 1
+            Head.hitPoint += 1
+            Head.money -= 6
+        elif room_numbers % 6 != 5:
+            pygame.sprite.groupcollide(hero, golden_heart, False, True)
+            Head.MaxHitPoint += 1
+            Head.hitPoint += 1
+    elif person in hero and pygame.sprite.spritecollideany(person, damage):
+        if room_numbers % 6 == 5 and Head.money - 10 >= 0:
+            pygame.sprite.groupcollide(hero, damage, False, True)
+            player_bullet_damage += 1
+            Head.money -= 10
+        elif room_numbers % 6 != 5:
+            pygame.sprite.groupcollide(hero, damage, False, True)
+            player_bullet_damage += 1
+    elif person in hero and pygame.sprite.spritecollideany(person, rate_of_fire):
+        if room_numbers % 6 == 5 and Head.money - 12 >= 0:
+            rate = int(rate * 0.85)
+            pygame.sprite.groupcollide(hero, rate_of_fire, False, True)
+            pygame.time.set_timer(SHOT_EVENT, rate)
+            Head.money -= 12
+        elif room_numbers % 6 != 5:
+            rate = int(rate * 0.85)
+            pygame.sprite.groupcollide(hero, rate_of_fire, False, True)
+            pygame.time.set_timer(SHOT_EVENT, rate)
 
 
 def terminate():
@@ -637,6 +725,9 @@ def enemy_moved(person):
                            speed_x=-7, speed_y=7, group='bullets_enemy', size=1)
             AnimatedSprite(load_image("ball.png"), 5, 1, person.rect.centerx, person.rect.centery,
                            speed_x=-7, speed_y=-7, group='bullets_enemy', size=1)
+        if person.hitPoint <= 0:
+            drop(randint(0, 100), person.rect.centerx, person.rect.centery)
+            person.kill()
 
 
 def player_moved():
@@ -719,11 +810,13 @@ def create_map(room_numbers):
 
 
 def generation_room(first_generation=False): # генерация комнаты
-    global shot_flag, left_door, right_door, generation_room_flag, room_numbers, enemies
+    global shot_flag, left_door, right_door, generation_room_flag, room_numbers, enemies, price, flag_portal
     room_numbers += 1
     [_.kill() for _ in thorns]
     [_.kill() for _ in boxes]
     [_.kill() for _ in loot]
+    [_.kill() for _ in portal_gr]
+    flag_portal = False
     if not first_generation:
         boxes.empty()
         thorns.empty()
@@ -741,6 +834,7 @@ def generation_room(first_generation=False): # генерация комнаты
     enemies = []
     if room_numbers % 6 == 0:
         Boss()
+        price = font.render('', True, pygame.Color('orange'))
     else:
         if room_numbers % 6 == 1:
             enemies.append('slime')
@@ -750,13 +844,19 @@ def generation_room(first_generation=False): # генерация комнаты
             enemies.append('enemy2')
         if room_numbers % 6 == 4:
             enemies.append('bot')
+        if room_numbers % 6 == 5:
+            shop()
+        if room_numbers // 6 == 1:
+            enemies.append('slime')
+        if room_numbers // 6 == 2:
+            enemies.append('enemy1')
     for i in enemies:
         if i == 'bot':
             Bot()
         elif i == 'enemy1':
             AnimatedSprite(load_image('enemy1.png', -2), 4, 1, 600, 150, group='enemy1')
         elif i == 'slime':
-            AnimatedSprite(load_image('slime.png'), 7, 1, 600, 600, group='slime')
+            AnimatedSprite(load_image('slime.png'), 7, 1, randint(300, 800), randint(200, 600), group='slime')
         else:
             AnimatedSprite(load_image('enemy2.png', -2), 4, 1, 600, 300, group='enemy2')
     boxes.update()
@@ -766,18 +866,67 @@ def generation_room(first_generation=False): # генерация комнаты
 def draw():
     walls.draw(screen)
     doors.draw(screen)
+    loot.draw(screen)
+    portal_gr.draw(screen)
     if Head.flag_hero:
         hero.draw(screen)
         box_thorns.draw(screen)
     else:
         box_thorns.draw(screen)
         hero.draw(screen)
-    loot.draw(screen)
     enemy.draw(screen)
     bullets.draw(screen)
     bullets_enemy.draw(screen)
     hearts.draw(screen)
     particles.draw(screen)
+
+
+def shop():
+    global price
+    x = screen.get_size()[0] // 2
+    drop(98, x - 90, 300)
+    drop(99, x, 300)
+    drop(100, x + 90, 300)
+    price = font.render('10    12     6', True, pygame.Color('orange'))
+
+
+def pause(text_pause=None):
+    if text_pause is None:
+        text_pause = ["Пауза", "Продолжить", f"полноэкранный режим:    ", 'Результаты', "Выход"]
+    global full_screen
+    pygame.mouse.set_visible(True)
+    while True:
+        global screen
+        if full_screen:
+            text_pause[2] = 'полноэкранный режим: Да'
+        else:
+            text_pause[2] = 'полноэкранный режим: Нет'
+        size = screen.get_size()[0] // 2 - 200
+        for line in range(len(text_pause)):
+            string_rendered = font.render(text_pause[line], True, pygame.Color('grey'))
+            screen.blit(string_rendered, (size, 300 + 40 * line))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            elif pygame.key.get_pressed()[pygame.K_ESCAPE]:
+                return
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if 420 <= event.pos[1] <= 460 and size <= event.pos[0] <= size + 800:
+                    terminate()
+                elif 380 < event.pos[1] <= 420 and size <= event.pos[0] <= size + 800:
+                    if not full_screen:
+                        full_screen = True
+                        screen = pygame.display.set_mode(
+                            (WIDTH, HEIGHT), pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.FULLSCREEN | pygame.SCALED,
+                            vsync=1)
+                    elif full_screen:
+                        full_screen = False
+                        screen = pygame.display.set_mode((WIDTH, HEIGHT), vsync=1)
+                elif 340 <= event.pos[1] <= 380 and size <= event.pos[0] <= size + 800:
+                    pygame.mouse.set_visible(False)
+                    return
+        pygame.display.flip()
+        clock.tick(30)
 
 
 def start_game():
@@ -792,19 +941,24 @@ def start_game():
     first_generation = True
     generation_room_flag = False
     create_player(300, 300)
-    [Heart(_) for _ in range(1, 6)]
+    [Heart(_) for _ in range(1, Head.MaxHitPoint + 1)]
 
 
+pygame.font.init()
+font = pygame.font.SysFont('ComicSansMS', 38)
+price = font.render('', True, pygame.Color('orange'))
+pause(['', 'Начать игру', f"полноэкранный режим: нет", "Выход"])
 start_game()
 first_generation = True
 generation_room_flag = False
 [Heart(_) for _ in range(1, 6)]
 running = True
-image_money = load_image('money.png', -2)
-pygame.font.init()
+image_money = pygame.transform.scale(load_image('money.png', -2), (50, 50))
+pygame.mixer.init()
+pygame.mixer.music.load('data/99_cavern_of_lost_souls.mp3')
+pygame.mixer.music.play(-1)
 while running:
-    font = pygame.font.SysFont('gigi', 50)
-    text = font.render(str(Head.money), True, (255, 255, 255))
+    text = font.render(str(Head.money), True, pygame.Color('orange'))
     if not generation_room_flag:
         generation_room(first_generation)
         first_generation = False
@@ -817,11 +971,18 @@ while running:
         if (event.type == SHOT_EVENT or shot_flag) and head_control:
             shot_flag = False
             attack(Head.route)
+        if pygame.key.get_pressed()[pygame.K_ESCAPE]:
+            pause()
     screen.blit(fon, (100, 125))
     screen.blit(text, (10, 50))
+    screen.blit(price, (screen.get_size()[0] // 2 - 90, 350))
     draw()
     screen.blit(image_money, (30, 35))
-    screen.blit(text, (70, 35))
+    if not pygame.mixer.music.get_busy():
+        x = choice(['data/cave1.mp3', 'data/cave2.mp3', 'data/cave3.mp3'])
+        pygame.mixer.music.load(x)
+        pygame.mixer.music.play()
+    screen.blit(text, (80, 35))
     [collision_calculation(_) for _ in bullets]
     [collision_calculation(_) for _ in bullets_enemy]
     [collision_calculation(_) for _ in enemy]
@@ -829,8 +990,13 @@ while running:
     right_door.interaction()
     left_door.close_door()
     right_door.close_door(True)
-    if not enemy:
+    if not enemy and room_numbers % 6 != 0:
         right_door.open_door()
+    elif not enemy and room_numbers % 6 == 0 and not flag_portal:
+        flag_portal = True
+        portal = Door(portal_flag=True)
+    if flag_portal:
+        portal.portal_func()
     Body.x, Body.y = Head.x, Head.y
     all_sprites.update()
     pygame.display.flip()
