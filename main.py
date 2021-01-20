@@ -17,7 +17,7 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT), vsync=1)
 pygame.display.set_caption('RogueLite')
 clock = pygame.time.Clock()
 head_control = False
-player_bullet_damage = 3
+player_bullet_damage = 1
 SHOT_EVENT = pygame.USEREVENT + 1
 pygame.time.set_timer(SHOT_EVENT, rate)
 pygame.time.set_timer(SHOT_EVENT, 1000)
@@ -48,9 +48,8 @@ walls = pygame.sprite.Group()
 doors = pygame.sprite.Group()
 bot = pygame.sprite.Group()
 boss = pygame.sprite.Group()
-bot = pygame.sprite.Group()
-boss = pygame.sprite.Group()
 pygame.mouse.set_visible(False)
+dealer = pygame.sprite.Group()
 
 
 def load_image(name, color_key=None):
@@ -222,7 +221,6 @@ class Door(pygame.sprite.Sprite):
             load_image('portal4.png', -2), (70, 135))]
 
     def __init__(self, right=False, portal_flag=False):
-
         if right:
             super().__init__(all_sprites, doors)
             self.image = Door.door_close
@@ -290,8 +288,12 @@ class Door(pygame.sprite.Sprite):
 
 
 class AnimatedSprite(pygame.sprite.Sprite):
-    def __init__(self, sheet, columns, rows, x,
-                 y, speed_x=0, speed_y=0, group='none', size=2):
+    boss_hp = 6
+
+    def __init__(self, sheet, columns, rows, x, y,
+                 speed_x=0, speed_y=0, group='none', size=2, hp=2):
+        if hp == 0:
+            hp = 2
         if group == 'bullets':
             super().__init__(all_sprites, bullets)
             size = 1.5
@@ -299,11 +301,12 @@ class AnimatedSprite(pygame.sprite.Sprite):
             super().__init__(all_sprites, bullets_enemy)
         if group == 'bot':
             super().__init__(all_sprites, enemy, bot)
-            self.hitPoint = 2
+            self.hitPoint = hp
         if group == 'boss':
             super().__init__(all_sprites, enemy, boss)
-            self.max_hit_point = 9
-            self.hitPoint = 9
+            self.max_hit_point = AnimatedSprite.boss_hp
+            self.hitPoint = AnimatedSprite.boss_hp
+            AnimatedSprite.boss_hp += 3
         elif group == 'hero':
             super().__init__(all_sprites, hero)
             self.flag_hero = False
@@ -313,15 +316,15 @@ class AnimatedSprite(pygame.sprite.Sprite):
             self.money = 0
         elif group == 'enemy1':
             super().__init__(all_sprites, enemy1, enemy)
-            self.hitPoint = 3
+            self.hitPoint = hp + 1
             self.time = 0
         elif group == 'enemy2':
             super().__init__(all_sprites, enemy2, enemy)
-            self.hitPoint = 3
+            self.hitPoint = hp + 1
             self.time = 0
         elif group == 'slime':
             super().__init__(all_sprites, slime, enemy)
-            self.hitPoint = 2
+            self.hitPoint = hp
         elif group == 'none':
             super().__init__(all_sprites)
         self.x, self.y = x, y
@@ -336,9 +339,12 @@ class AnimatedSprite(pygame.sprite.Sprite):
         self.cut_sheet(sheet, columns, rows)
         self.cur_frame = 0
         self.image = self.frames[self.cur_frame]
+        self.rect.x, self.rect.y = x, y
         if group == 'hero':
             self.rect.size = (60, 80)
-        self.rect = self.rect.move(self.x, self.y)
+        while pygame.sprite.spritecollideany(self, boxes):
+            self.rect.x = randint(300, 800)
+            self.rect.y = randint(200, 600)
         self.x, self.y = speed_x, speed_y
 
     def cut_sheet(self, sheet, columns, rows):
@@ -403,9 +409,10 @@ class Bot(AnimatedSprite):
 
     def __init__(self, image=False):
         if image:
-            super().__init__(image, 7, 1, 600, 400, group='boss', size=3)
+            super().__init__(image, 7, 1, 600, 300, group='boss', size=3)
         else:
-            super().__init__(Bot.image, 7, 1, 600, 300, group='bot')
+            super().__init__(Bot.image, 7, 1, randint(300, 800),
+                             randint(150, 600), group='bot')
         self.time = pygame.time.get_ticks()
 
     def update(self):
@@ -501,6 +508,16 @@ class Boss(Bot):
             screen, (0, 0, 0), (410, 70, 180, 35), width=3)
 
 
+class Dealer(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__(all_sprites, dealer)
+        self.image = pygame.transform.scale(load_image('dealer.png'),
+                                            (100, 100))
+        self.rect = self.image.get_rect()
+        self.rect.x = 470
+        self.rect.y = 180
+
+
 class Particle(pygame.sprite.Sprite):
     def __init__(self, pos, color='black'):
         super().__init__(all_sprites, particles)
@@ -537,6 +554,8 @@ def hit(damage, person=False):
         if person:
             person.rect.x, person.rect.y = \
                 person.rect.x - person.x * 10, person.rect.y - person.y * 10
+        pygame.mixer.music.load('data/hit.mp3')
+        pygame.mixer.music.play(0)
 
 
 def drop(thing, x, y):
@@ -620,8 +639,6 @@ def collision_calculation(person):
     if person in hero and pygame.sprite.spritecollideany(
             person, bullets_enemy):
         pygame.sprite.groupcollide(hero, bullets_enemy, False, True)
-        pygame.mixer.music.load('data/hit.mp3')
-        pygame.mixer.music.play()
         hit(1)
     if pygame.sprite.spritecollideany(person, loot):
         drop_collide(person)
@@ -885,10 +902,10 @@ def create_player(x, y):
 
 
 def create_map(room_numbers):
-    if room_numbers % 6 == 0 or room_numbers % 5 == 0:
+    if room_numbers % 6 == 0 or room_numbers % 6 == 5:
         filename = "data/rooms/" + 'boss_map.txt'
     else:
-        filename = "data/rooms/" + 'map1.txt'
+        filename = "data/rooms/" + f'map{randint(1, 4)}.txt'
     if not os.path.isfile(filename):
         print(f"Файл с уровнем '{filename}' не найден")
     with open(filename, 'r') as mapFile:
@@ -904,6 +921,7 @@ def create_map(room_numbers):
 def generation_room(first_generation=False):  # генерация комнаты
     global shot_flag, left_door, right_door, generation_room_flag, \
         room_numbers, enemies, price, flag_portal
+    hp = 0
     room_numbers += 1
     [_.kill() for _ in thorns]
     [_.kill() for _ in boxes]
@@ -927,40 +945,59 @@ def generation_room(first_generation=False):  # генерация комнат�
     enemies = []
     if room_numbers % 6 == 0:
         Boss()
+        [_.kill() for _ in dealer]
         price = font.render('', True, pygame.Color('orange'))
     else:
-        if room_numbers % 6 == 1:
+        if room_numbers % 6 == 1 and room_numbers // 6 < 4:
             enemies.append('slime')
-        if room_numbers % 6 == 2:
+        if room_numbers % 6 == 2 and room_numbers // 6 < 4:
             enemies.append('enemy1')
-        if room_numbers % 6 == 3:
+        if room_numbers % 6 == 3 and room_numbers // 6 < 4:
             enemies.append('enemy2')
-        if room_numbers % 6 == 4:
+        if room_numbers % 6 == 4 and room_numbers // 6 < 4:
             enemies.append('bot')
         if room_numbers % 6 == 5:
+            Dealer()
             shop()
         if room_numbers // 6 == 1:
             enemies.append('slime')
         if room_numbers // 6 == 2:
+            enemies.append('slime')
             enemies.append('enemy1')
+        if room_numbers // 6 == 3:
+            enemies.append('slime')
+            enemies.append('enemy1')
+            enemies.append('enemy2')
+        if room_numbers // 6 >= 4:
+            enemies.append('slime')
+            enemies.append('enemy1')
+            enemies.append('enemy2')
+            enemies.append('bot')
+        if room_numbers // 6 == 6:
+            hp = room_numbers // 6 // 2
     for i in enemies:
+        if room_numbers % 6 == 5:
+            break
         if i == 'bot':
             Bot()
         elif i == 'enemy1':
             AnimatedSprite(load_image('enemy1.png', -2), 4, 1,
-                           600, 150, group='enemy1')
+                           randint(300, 800), randint(200, 600),
+                           group='enemy1', hp=hp)
         elif i == 'slime':
             AnimatedSprite(load_image('slime.png'), 7, 1,
                            randint(300, 800), randint(200, 600),
-                           group='slime')
+                           group='slime', hp=hp)
         else:
             AnimatedSprite(load_image('enemy2.png', -2), 4, 1,
-                           600, 300, group='enemy2')
+                           randint(300, 800), randint(200, 600),
+                           group='enemy2', hp=hp)
     boxes.update()
     generation_room_flag = True
 
 
 def draw():
+    dealer.draw(screen)
     walls.draw(screen)
     doors.draw(screen)
     loot.draw(screen)
@@ -1046,7 +1083,7 @@ def start_game():
     Wall('bottom')
     first_generation = True
     generation_room_flag = False
-    create_player(300, 300)
+    create_player(300, 200)
     [Heart(_) for _ in range(1, Head.MaxHitPoint + 1)]
 
 
@@ -1087,6 +1124,12 @@ while running:
         pygame.mixer.music.load(x)
         pygame.mixer.music.play()
     screen.blit(text, (80, 35))
+    screen.blit(font.render(str(
+        room_numbers // 6) + '  этаж', True,
+                            pygame.Color('orange')), (800, 700))
+    screen.blit(font.render(str(
+        room_numbers % 6) + '  комната', True,
+                            pygame.Color('orange')),(800, 750))
     [collision_calculation(_) for _ in bullets]
     [collision_calculation(_) for _ in bullets_enemy]
     [collision_calculation(_) for _ in enemy]
