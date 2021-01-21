@@ -1120,7 +1120,8 @@ while running:
     draw()
     screen.blit(image_money, (30, 35))
     if not pygame.mixer.music.get_busy():
-        x = choice(['data/sound/cave1.mp3', 'data/sound/cave2.mp3', 'data/sound/cave3.mp3'])
+        x = choice(['data/sound/cave1.mp3',
+                    'data/sound/cave2.mp3', 'data/sound/cave3.mp3'])
         pygame.mixer.music.load(x)
         pygame.mixer.music.play()
     screen.blit(text, (80, 35))
